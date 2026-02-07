@@ -1,7 +1,6 @@
 const std = @import("std");
 const io = std.io;
 const mem = std.mem;
-const http = std.http;
 
 // Node types in the decision tree
 const NodeType = enum {
