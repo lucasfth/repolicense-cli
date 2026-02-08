@@ -79,10 +79,6 @@ The tool helps you choose from the following licenses:
 - **Public Domain**: Unlicense
 - **Specialized**: OFL-1.1 (for fonts)
 
-## License
-
-This project is licensed under the GNU General Public License Version 3.0 - see the [LICENSE](LICENSE) file for details.
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
