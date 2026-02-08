@@ -11,6 +11,7 @@ This is a CLI version of [repolicense](https://github.com/lucasfth/repolicense),
 - Reset at any time to start over
 - Get detailed information about each license
 - Links to GitHub API for license details
+- **NEW**: License compatibility checker for forking projects
 
 ## Prerequisites
 
@@ -36,7 +37,19 @@ Or build and run in one command:
 zig build run
 ```
 
+### License Compatibility Mode
+
+To check which licenses you can use when forking or combining projects:
+
+```bash
+./zig-out/bin/repolicense compat
+```
+
+This mode helps you determine compatible licenses when you want to combine code from multiple projects with different licenses.
+
 ## Usage
+
+### License Selection Mode (Default)
 
 The tool will ask you a series of yes/no questions about your project requirements. Based on your answers, it will recommend an appropriate open-source license.
 
@@ -46,6 +59,30 @@ Available commands:
 - `back` or `b` - Go back to the previous question
 - `reset` or `r` - Start over from the beginning
 - `quit` or `q` - Exit the program
+
+### License Compatibility Mode
+
+Run with `compat` argument to check license compatibility:
+
+```bash
+./zig-out/bin/repolicense compat
+```
+
+This mode allows you to:
+- Enter a comma-separated list of licenses from projects you want to combine
+- See which licenses are compatible with all of them
+- Understand why certain combinations are compatible or not
+
+Example:
+```
+Enter licenses: MIT, Apache-2.0
+✅ You can use any of these licenses for your combined work:
+  • MIT
+  • BSD-2-Clause
+  • Apache-2.0
+  • GPL-3.0
+  ...
+```
 
 ## Example
 
@@ -78,6 +115,19 @@ The tool helps you choose from the following licenses:
 - **Copyleft**: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-3.0, MPL-2.0, EPL-1.0, EPL-2.0
 - **Public Domain**: Unlicense
 - **Specialized**: OFL-1.1 (for fonts)
+
+## Testing
+
+Run the test suite:
+
+```bash
+zig build test
+```
+
+The test suite includes:
+- Decision tree structure validation
+- License compatibility logic tests
+- Navigation and path verification
 
 ## License
 
