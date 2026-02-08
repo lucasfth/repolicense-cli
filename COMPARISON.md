@@ -17,6 +17,7 @@ This CLI tool (`repolicense-cli`) is a command-line implementation of the web-ba
 | Mermaid Diagram Export | ✅ Copy to clipboard | ❌ Not implemented |
 | Download Tree | ✅ JSON download | ❌ Not implemented |
 | Visual Design | ✅ Modern UI with Shoelace | ✅ Clean text output |
+| License Compatibility Checker | ❌ Not implemented | ✅ New feature for checking compatible licenses when forking/combining projects |
 | Platform | 🌐 Browser-based | 💻 Native CLI |
 
 ## Architecture Differences

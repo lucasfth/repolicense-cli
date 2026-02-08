@@ -1,13 +1,13 @@
 .{
-    .name = "repolicense-cli",
-    .version = "1.0.0",
-    .minimum_zig_version = "0.13.0",
-    .dependencies = .{},
+    .name = .repolicense_cli,
+    .version = "0.0.0",
+    .fingerprint = 0x38a819a8db54f0a5, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "src",
-        "README.md",
-        "LICENSE",
     },
 }
