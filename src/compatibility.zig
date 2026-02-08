@@ -7,7 +7,6 @@ const std = @import("std");
 /// - Permissive licenses (MIT, BSD, Apache) are generally compatible with everything
 /// - Copyleft licenses (GPL, AGPL) require derivatives to use the same or compatible license
 /// - Some licenses (Apache-2.0 + GPL-2.0) have known incompatibilities
-
 pub const License = enum {
     MIT,
     BSD_2_Clause,
@@ -29,27 +28,32 @@ pub const License = enum {
         // Convert to uppercase for case-insensitive matching
         var buf: [32]u8 = undefined;
         if (s.len > buf.len) return null;
-        
+
         const upper = std.ascii.upperString(&buf, s);
-        
-        const map = std.ComptimeStringMap(License, .{
-            .{ "MIT", .MIT },
-            .{ "BSD-2-CLAUSE", .BSD_2_Clause },
-            .{ "BSD-3-CLAUSE", .BSD_3_Clause },
-            .{ "APACHE-2.0", .Apache_2_0 },
-            .{ "0BSD", .@"0BSD" },
-            .{ "ISC", .ISC },
-            .{ "AGPL-3.0", .AGPL_3_0 },
-            .{ "GPL-3.0", .GPL_3_0 },
-            .{ "GPL-2.0", .GPL_2_0 },
-            .{ "LGPL-3.0", .LGPL_3_0 },
-            .{ "MPL-2.0", .MPL_2_0 },
-            .{ "EPL-2.0", .EPL_2_0 },
-            .{ "EPL-1.0", .EPL_1_0 },
-            .{ "UNLICENSE", .Unlicense },
-            .{ "OFL-1.1", .OFL_1_1 },
-        });
-        return map.get(upper);
+
+        const table = [_]struct { name: []const u8, value: License }{
+            .{ .name = "MIT", .value = .MIT },
+            .{ .name = "BSD-2-CLAUSE", .value = .BSD_2_Clause },
+            .{ .name = "BSD-3-CLAUSE", .value = .BSD_3_Clause },
+            .{ .name = "APACHE-2.0", .value = .Apache_2_0 },
+            .{ .name = "0BSD", .value = .@"0BSD" },
+            .{ .name = "ISC", .value = .ISC },
+            .{ .name = "AGPL-3.0", .value = .AGPL_3_0 },
+            .{ .name = "GPL-3.0", .value = .GPL_3_0 },
+            .{ .name = "GPL-2.0", .value = .GPL_2_0 },
+            .{ .name = "LGPL-3.0", .value = .LGPL_3_0 },
+            .{ .name = "MPL-2.0", .value = .MPL_2_0 },
+            .{ .name = "EPL-2.0", .value = .EPL_2_0 },
+            .{ .name = "EPL-1.0", .value = .EPL_1_0 },
+            .{ .name = "UNLICENSE", .value = .Unlicense },
+            .{ .name = "OFL-1.1", .value = .OFL_1_1 },
+        };
+
+        for (table) |entry| {
+            if (std.mem.eql(u8, upper, entry.name)) return entry.value;
+        }
+
+        return null;
     }
 
     pub fn toString(self: License) []const u8 {
@@ -171,8 +175,8 @@ pub fn isCompatible(existing: License, new_license: License) bool {
 /// Find all compatible licenses given a list of existing licenses
 /// Allocates and returns a list of compatible licenses
 pub fn findCompatibleLicenses(allocator: std.mem.Allocator, existing_licenses: []const License) ![]const License {
-    var compatible = std.ArrayList(License).init(allocator);
-    defer compatible.deinit();
+    var compatible = try std.ArrayList(License).initCapacity(allocator, 0);
+    defer compatible.deinit(allocator);
 
     // All possible licenses to check
     const all_licenses = [_]License{
@@ -204,11 +208,11 @@ pub fn findCompatibleLicenses(allocator: std.mem.Allocator, existing_licenses: [
         }
 
         if (is_compatible_with_all) {
-            try compatible.append(candidate);
+            try compatible.append(allocator, candidate);
         }
     }
 
-    return compatible.toOwnedSlice();
+    return compatible.toOwnedSlice(allocator);
 }
 
 /// Get a brief explanation of why licenses are compatible or not

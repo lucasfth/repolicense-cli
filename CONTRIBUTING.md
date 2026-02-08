@@ -10,7 +10,7 @@ Thank you for your interest in contributing to repolicense-cli!
 
 ## Prerequisites
 
-- Zig 0.13.0 or later: [Download Zig](https://ziglang.org/download/)
+- Zig 0.15.2 or later: [Download Zig](https://ziglang.org/download/)
 
 ## Building
 
@@ -27,7 +27,7 @@ zig build test
 ## Code Style
 
 - Follow Zig standard library conventions
-- Use 4 spaces for indentation
+- Use 2 spaces for indentation
 - Keep functions focused and concise
 - Add comments for complex logic
 
@@ -35,7 +35,7 @@ zig build test
 
 To add a new license to the decision tree:
 
-1. Open `src/main.zig`
+1. Open `src/tree.zig`
 2. Add a new `Node` constant in the `buildDecisionTree()` function
 3. Update the tree structure to include your new license
 4. Update the README with the new license information
