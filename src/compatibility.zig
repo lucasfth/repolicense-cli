@@ -26,11 +26,17 @@ pub const License = enum {
     OFL_1_1,
 
     pub fn fromString(s: []const u8) ?License {
+        // Convert to uppercase for case-insensitive matching
+        var buf: [32]u8 = undefined;
+        if (s.len > buf.len) return null;
+        
+        const upper = std.ascii.upperString(&buf, s);
+        
         const map = std.ComptimeStringMap(License, .{
             .{ "MIT", .MIT },
-            .{ "BSD-2-Clause", .BSD_2_Clause },
-            .{ "BSD-3-Clause", .BSD_3_Clause },
-            .{ "Apache-2.0", .Apache_2_0 },
+            .{ "BSD-2-CLAUSE", .BSD_2_Clause },
+            .{ "BSD-3-CLAUSE", .BSD_3_Clause },
+            .{ "APACHE-2.0", .Apache_2_0 },
             .{ "0BSD", .@"0BSD" },
             .{ "ISC", .ISC },
             .{ "AGPL-3.0", .AGPL_3_0 },
@@ -40,10 +46,10 @@ pub const License = enum {
             .{ "MPL-2.0", .MPL_2_0 },
             .{ "EPL-2.0", .EPL_2_0 },
             .{ "EPL-1.0", .EPL_1_0 },
-            .{ "Unlicense", .Unlicense },
+            .{ "UNLICENSE", .Unlicense },
             .{ "OFL-1.1", .OFL_1_1 },
         });
-        return map.get(s);
+        return map.get(upper);
     }
 
     pub fn toString(self: License) []const u8 {

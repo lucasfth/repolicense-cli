@@ -21,7 +21,14 @@ test "License fromString and toString roundtrip" {
 test "License fromString returns null for invalid input" {
     try testing.expect(compatibility.License.fromString("Invalid") == null);
     try testing.expect(compatibility.License.fromString("") == null);
-    try testing.expect(compatibility.License.fromString("mit") == null); // Case sensitive
+}
+
+test "License fromString is case-insensitive" {
+    try testing.expect(compatibility.License.fromString("mit") != null);
+    try testing.expect(compatibility.License.fromString("MIT") != null);
+    try testing.expect(compatibility.License.fromString("Mit") != null);
+    try testing.expectEqual(compatibility.License.MIT, compatibility.License.fromString("mit").?);
+    try testing.expectEqual(compatibility.License.Apache_2_0, compatibility.License.fromString("apache-2.0").?);
 }
 
 test "getCategory returns correct categories" {

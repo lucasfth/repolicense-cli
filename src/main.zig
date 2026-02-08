@@ -6,7 +6,7 @@ const compatibility = @import("compatibility.zig");
 
 const Node = tree.Node;
 const NodeType = tree.NodeType;
-const decision_tree = &tree.decision_tree;
+const decision_tree = tree.decision_tree;
 
 const History = std.ArrayList(*const Node);
 
@@ -146,7 +146,7 @@ fn runDecisionTree(allocator: std.mem.Allocator, stdout: anytype) !void {
     var history = History.init(allocator);
     defer history.deinit();
 
-    var current_node = decision_tree;
+    var current_node = &decision_tree;
     try history.append(current_node);
 
     // Print welcome message
@@ -201,7 +201,7 @@ fn runDecisionTree(allocator: std.mem.Allocator, stdout: anytype) !void {
             }
         } else if (mem.eql(u8, lower, "reset") or mem.eql(u8, lower, "r")) {
             history.clearRetainingCapacity();
-            current_node = decision_tree;
+            current_node = &decision_tree;
             try history.append(current_node);
             try stdout.print("\n[Reset to beginning]\n", .{});
         } else if (current_node.node_type == .Question) {
