@@ -50,10 +50,23 @@ pub fn build(b: *std.Build) void {
         .root_module = compatibility_test_module,
     });
 
+    const ui_test_module = b.addModule("ui_test", .{
+        .root_source_file = b.path("src/ui_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const ui_tests = b.addTest(.{
+        .name = "ui_test",
+        .root_module = ui_test_module,
+    });
+
     const run_tree_tests = b.addRunArtifact(tree_tests);
     const run_compatibility_tests = b.addRunArtifact(compatibility_tests);
+    const run_ui_tests = b.addRunArtifact(ui_tests);
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_tree_tests.step);
     test_step.dependOn(&run_compatibility_tests.step);
+    test_step.dependOn(&run_ui_tests.step);
 }

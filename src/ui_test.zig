@@ -4,18 +4,18 @@ const ui = @import("ui.zig");
 
 // A tiny writer that collects printed bytes into an ArrayList(u8).
 const CaptureWriter = struct {
-    allocator: *std.mem.Allocator,
+    allocator: std.mem.Allocator,
     buf: *std.ArrayList(u8),
 
-    pub fn init(allocator: *std.mem.Allocator, buf: *std.ArrayList(u8)) CaptureWriter {
+    pub fn init(allocator: std.mem.Allocator, buf: *std.ArrayList(u8)) CaptureWriter {
         return CaptureWriter{ .allocator = allocator, .buf = buf };
     }
 
-    pub fn print(self: *CaptureWriter, fmt: []const u8, args: anytype) !void {
-        const s = try std.fmt.allocPrint(self.allocator.*, fmt, args);
-        defer self.allocator.*.free(s);
+    pub fn print(self: *CaptureWriter, comptime fmt: []const u8, args: anytype) !void {
+        const s = try std.fmt.allocPrint(self.allocator, fmt, args);
+        defer self.allocator.free(s);
         for (s) |c| {
-            try self.buf.append(self.allocator.*, c);
+            try self.buf.append(self.allocator, c);
         }
     }
 };
