@@ -108,24 +108,24 @@ test "OFL-1.1 is specialized and restrictive" {
 test "findCompatibleLicenses with single MIT license" {
     const allocator = testing.allocator;
     const existing = [_]compatibility.License{.MIT};
-    
+
     const compatible = try compatibility.findCompatibleLicenses(allocator, &existing);
     defer allocator.free(compatible);
-    
+
     // MIT should allow many licenses
     try testing.expect(compatible.len > 0);
-    
+
     // Should include common permissive licenses
     var found_mit = false;
     var found_apache = false;
     var found_gpl3 = false;
-    
+
     for (compatible) |lic| {
         if (lic == .MIT) found_mit = true;
         if (lic == .Apache_2_0) found_apache = true;
         if (lic == .GPL_3_0) found_gpl3 = true;
     }
-    
+
     try testing.expect(found_mit);
     try testing.expect(found_apache);
     try testing.expect(found_gpl3);
@@ -134,21 +134,21 @@ test "findCompatibleLicenses with single MIT license" {
 test "findCompatibleLicenses with GPL-3.0" {
     const allocator = testing.allocator;
     const existing = [_]compatibility.License{.GPL_3_0};
-    
+
     const compatible = try compatibility.findCompatibleLicenses(allocator, &existing);
     defer allocator.free(compatible);
-    
+
     // GPL-3.0 is restrictive, should only allow GPL-3.0 and AGPL-3.0
     try testing.expect(compatible.len == 2);
-    
+
     var found_gpl3 = false;
     var found_agpl3 = false;
-    
+
     for (compatible) |lic| {
         if (lic == .GPL_3_0) found_gpl3 = true;
         if (lic == .AGPL_3_0) found_agpl3 = true;
     }
-    
+
     try testing.expect(found_gpl3);
     try testing.expect(found_agpl3);
 }
@@ -156,10 +156,10 @@ test "findCompatibleLicenses with GPL-3.0" {
 test "findCompatibleLicenses with MIT and Apache-2.0" {
     const allocator = testing.allocator;
     const existing = [_]compatibility.License{ .MIT, .Apache_2_0 };
-    
+
     const compatible = try compatibility.findCompatibleLicenses(allocator, &existing);
     defer allocator.free(compatible);
-    
+
     // Both are permissive, should allow many licenses
     try testing.expect(compatible.len > 0);
 }
@@ -167,10 +167,10 @@ test "findCompatibleLicenses with MIT and Apache-2.0" {
 test "findCompatibleLicenses with conflicting licenses" {
     const allocator = testing.allocator;
     const existing = [_]compatibility.License{ .GPL_3_0, .OFL_1_1 };
-    
+
     const compatible = try compatibility.findCompatibleLicenses(allocator, &existing);
     defer allocator.free(compatible);
-    
+
     // These are incompatible, should find no compatible licenses
     try testing.expect(compatible.len == 0);
 }
@@ -178,10 +178,10 @@ test "findCompatibleLicenses with conflicting licenses" {
 test "getCompatibilityReason returns non-empty string" {
     const reason1 = compatibility.getCompatibilityReason(.MIT, .MIT);
     try testing.expect(reason1.len > 0);
-    
+
     const reason2 = compatibility.getCompatibilityReason(.MIT, .GPL_3_0);
     try testing.expect(reason2.len > 0);
-    
+
     const reason3 = compatibility.getCompatibilityReason(.Apache_2_0, .GPL_2_0);
     try testing.expect(reason3.len > 0);
 }
