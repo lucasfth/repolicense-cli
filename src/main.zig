@@ -1,293 +1,12 @@
 const std = @import("std");
 const io = std.io;
 const mem = std.mem;
+const tree = @import("tree.zig");
+const compatibility = @import("compatibility.zig");
 
-// Node types in the decision tree
-const NodeType = enum {
-    Question,
-    Answer,
-};
-
-const Node = struct {
-    node_type: NodeType,
-    content: []const u8,
-    elaboration: []const u8,
-    yes: ?*const Node,
-    no: ?*const Node,
-};
-
-// Decision tree structure matching the original JavaScript logic
-const decision_tree = buildDecisionTree();
-
-fn buildDecisionTree() Node {
-    // Leaf nodes (answers)
-    const mit_node = Node{
-        .node_type = .Answer,
-        .content = "MIT",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const bsd_2_clause = Node{
-        .node_type = .Answer,
-        .content = "BSD-2-Clause",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const apache_2_0 = Node{
-        .node_type = .Answer,
-        .content = "Apache-2.0",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const bsd_3_clause = Node{
-        .node_type = .Answer,
-        .content = "BSD-3-Clause",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const zero_bsd = Node{
-        .node_type = .Answer,
-        .content = "0BSD",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const isc = Node{
-        .node_type = .Answer,
-        .content = "ISC",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const agpl_3_0 = Node{
-        .node_type = .Answer,
-        .content = "AGPL-3.0",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const gpl_3_0 = Node{
-        .node_type = .Answer,
-        .content = "GPL-3.0",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const gpl_2_0 = Node{
-        .node_type = .Answer,
-        .content = "GPL-2.0",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const lgpl_3_0 = Node{
-        .node_type = .Answer,
-        .content = "LGPL-3.0",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const mpl_2_0 = Node{
-        .node_type = .Answer,
-        .content = "MPL-2.0",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const epl_2_0 = Node{
-        .node_type = .Answer,
-        .content = "EPL-2.0",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const epl_1_0 = Node{
-        .node_type = .Answer,
-        .content = "EPL-1.0",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const unlicense = Node{
-        .node_type = .Answer,
-        .content = "Unlicense",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const ofl_1_1 = Node{
-        .node_type = .Answer,
-        .content = "OFL-1.1",
-        .elaboration = "",
-        .yes = null,
-        .no = null,
-    };
-
-    const proprietary = Node{
-        .node_type = .Answer,
-        .content = "Consider using a proprietary license or another specialized license.",
-        .elaboration = "You should consider using a proprietary license or another specialized license by consulting with a legal expert.",
-        .yes = null,
-        .no = null,
-    };
-
-    const closed_source = Node{
-        .node_type = .Answer,
-        .content = "You should consider keeping your project closed-source.",
-        .elaboration = "You should consider keeping your project closed-source to protect your intellectual property by not sharing the source code.",
-        .yes = null,
-        .no = null,
-    };
-
-    // Build tree from bottom up
-    const simplest_permissive = Node{
-        .node_type = .Question,
-        .content = "Do you want the simplest and most permissive license possible?",
-        .elaboration = "Do you want a license that is very permissive and has minimal requirements, making it as simple as possible for others to use your code.",
-        .yes = &mit_node,
-        .no = &bsd_2_clause,
-    };
-
-    const simplest_no_conditions = Node{
-        .node_type = .Question,
-        .content = "Do you want the simplest permissive license with no conditions?",
-        .elaboration = "Do you want the simplest permissive license with no conditions, providing complete freedom to use the code without any restrictions.",
-        .yes = &zero_bsd,
-        .no = &isc,
-    };
-
-    const permissive_with_conditions = Node{
-        .node_type = .Question,
-        .content = "Do you want a permissive license with some conditions?",
-        .elaboration = "Do you want a permissive license that includes some conditions such as providing attribution and not using the name of the project or its contributors for promotion without permission.",
-        .yes = &bsd_3_clause,
-        .no = &simplest_no_conditions,
-    };
-
-    const explicit_patent_grants = Node{
-        .node_type = .Question,
-        .content = "Do you want explicit patent grants?",
-        .elaboration = "Do you want to include explicit grants of patent rights, which can protect users from patent litigation. This is an important consideration for projects that may involve patented technology.",
-        .yes = &apache_2_0,
-        .no = &permissive_with_conditions,
-    };
-
-    const minimal_conditions = Node{
-        .node_type = .Question,
-        .content = "Do you require minimal conditions?",
-        .elaboration = "Do you want minimal conditions meaning that there are very few requirements placed on the use of your code. This typically includes providing attribution to the original authors.",
-        .yes = &simplest_permissive,
-        .no = &explicit_patent_grants,
-    };
-
-    const latest_gpl = Node{
-        .node_type = .Question,
-        .content = "Do you want to use the latest version of the GPL license?",
-        .elaboration = "Do you prefer using the latest version of the GPL license, which includes additional protections and clarifications compared to older versions.",
-        .yes = &gpl_3_0,
-        .no = &gpl_2_0,
-    };
-
-    const network_server_protection = Node{
-        .node_type = .Question,
-        .content = "Do you want network server protection?",
-        .elaboration = "Do you want to extend copyleft requirements to software provided over a network. This means that users who interact with the software over a network (e.g., web applications) must also have access to the source code.",
-        .yes = &agpl_3_0,
-        .no = &latest_gpl,
-    };
-
-    const business_friendly_copyleft = Node{
-        .node_type = .Question,
-        .content = "Do you prefer a copyleft license with a focus on business-friendly terms?",
-        .elaboration = "Do you prefer a copyleft license that has a focus on business-friendly terms, making it easier for companies to adopt.",
-        .yes = &epl_2_0,
-        .no = &epl_1_0,
-    };
-
-    const weaker_copyleft = Node{
-        .node_type = .Question,
-        .content = "Do you want a copyleft license with weaker requirements?",
-        .elaboration = "Do you want a copyleft license that has weaker requirements compared to the GPL, such as allowing proprietary modules in your project.",
-        .yes = &mpl_2_0,
-        .no = &business_friendly_copyleft,
-    };
-
-    const allow_linking = Node{
-        .node_type = .Question,
-        .content = "Do you want to allow linking with non-(L)GPL software?",
-        .elaboration = "Do you want to allow linking with non-(L)GPL software, making it easier to use your code as a library in proprietary software while keeping modifications to the library itself open source.",
-        .yes = &lgpl_3_0,
-        .no = &weaker_copyleft,
-    };
-
-    const strong_copyleft = Node{
-        .node_type = .Question,
-        .content = "Do you want strong copyleft?",
-        .elaboration = "Do you want to require that any distributed modifications (or in some cases, software that interacts with the copylefted code) also be open-sourced. This ensures that improvements to the code are shared with the community.",
-        .yes = &network_server_protection,
-        .no = &allow_linking,
-    };
-
-    const font_license = Node{
-        .node_type = .Question,
-        .content = "Do you want a license for fonts?",
-        .elaboration = "Do you want a license specifically designed for fonts, allowing embedding, modifying, and redistributing the font.",
-        .yes = &ofl_1_1,
-        .no = &proprietary,
-    };
-
-    const public_domain = Node{
-        .node_type = .Question,
-        .content = "Do you want to dedicate your work to the public domain?",
-        .elaboration = "Do you want to dedicate your work to the public domain, allowing anyone to use, modify, and distribute your work without any restrictions.",
-        .yes = &unlicense,
-        .no = &font_license,
-    };
-
-    const copyleft_license = Node{
-        .node_type = .Question,
-        .content = "Do you want a copyleft license?",
-        .elaboration = "Do you want to require that any modified versions of your code be distributed under the same license, ensuring that the code (and its derivatives) remain open source.",
-        .yes = &strong_copyleft,
-        .no = &public_domain,
-    };
-
-    const permissive_license = Node{
-        .node_type = .Question,
-        .content = "Do you want a permissive license?",
-        .elaboration = "Do you want a more lenient license and allow others to use, modify, and distribute your code with minimal restrictions. These licenses are generally business-friendly and encourage wider use.",
-        .yes = &minimal_conditions,
-        .no = &copyleft_license,
-    };
-
-    const root = Node{
-        .node_type = .Question,
-        .content = "Do you want to open-source your project?",
-        .elaboration = "Do you want to make your source code publicly available and allow others to use, modify, and distribute it.",
-        .yes = &permissive_license,
-        .no = &closed_source,
-    };
-
-    return root;
-}
+const Node = tree.Node;
+const NodeType = tree.NodeType;
+const decision_tree = &tree.decision_tree;
 
 const History = std.ArrayList(*const Node);
 
@@ -297,18 +16,144 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const stdout = io.getStdOut().writer();
+    
+    // Check for command-line arguments
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    // Check if compatibility mode is requested
+    if (args.len > 1 and mem.eql(u8, args[1], "compat")) {
+        try runCompatibilityMode(allocator, stdout);
+        return;
+    }
+
+    // Run normal decision tree mode
+    try runDecisionTree(allocator, stdout);
+}
+
+fn runCompatibilityMode(allocator: std.mem.Allocator, stdout: anytype) !void {
+    const stdin = io.getStdIn().reader();
+    
+    try stdout.print("\n=== License Compatibility Checker ===\n", .{});
+    try stdout.print("This tool helps you find compatible licenses when forking or combining projects.\n\n", .{});
+    try stdout.print("Enter the licenses of the projects you want to combine (comma-separated).\n", .{});
+    try stdout.print("Example: MIT, Apache-2.0, BSD-3-Clause\n\n", .{});
+    try stdout.print("Supported licenses:\n", .{});
+    try stdout.print("  Permissive: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD, ISC\n", .{});
+    try stdout.print("  Copyleft: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-3.0\n", .{});
+    try stdout.print("  Weak Copyleft: MPL-2.0, EPL-2.0, EPL-1.0\n", .{});
+    try stdout.print("  Other: Unlicense, OFL-1.1\n\n", .{});
+    try stdout.print("Enter licenses (or 'quit' to exit): ", .{});
+
+    var buf: [1024]u8 = undefined;
+    
+    while (true) {
+        const line = (try stdin.readUntilDelimiterOrEof(&buf, '\n')) orelse break;
+        const trimmed = mem.trim(u8, line, &std.ascii.whitespace);
+        
+        if (trimmed.len == 0) {
+            try stdout.print("\nEnter licenses (or 'quit' to exit): ", .{});
+            continue;
+        }
+        
+        if (mem.eql(u8, trimmed, "quit") or mem.eql(u8, trimmed, "q")) {
+            try stdout.print("\nThank you for using the compatibility checker!\n", .{});
+            break;
+        }
+
+        // Parse comma-separated licenses
+        var licenses = std.ArrayList(compatibility.License).init(allocator);
+        defer licenses.deinit();
+        
+        var iter = mem.split(u8, trimmed, ",");
+        var has_error = false;
+        
+        while (iter.next()) |license_str| {
+            const clean = mem.trim(u8, license_str, &std.ascii.whitespace);
+            if (clean.len == 0) continue;
+            
+            if (compatibility.License.fromString(clean)) |lic| {
+                try licenses.append(lic);
+            } else {
+                try stdout.print("\nError: Unknown license '{s}'\n", .{clean});
+                has_error = true;
+                break;
+            }
+        }
+        
+        if (has_error) {
+            try stdout.print("\nEnter licenses (or 'quit' to exit): ", .{});
+            continue;
+        }
+        
+        if (licenses.items.len == 0) {
+            try stdout.print("\nError: No valid licenses entered\n", .{});
+            try stdout.print("\nEnter licenses (or 'quit' to exit): ", .{});
+            continue;
+        }
+
+        // Find compatible licenses
+        const compatible_licenses = try compatibility.findCompatibleLicenses(allocator, licenses.items);
+        defer allocator.free(compatible_licenses);
+
+        try stdout.print("\n--- Results ---\n", .{});
+        try stdout.print("Given licenses: ", .{});
+        for (licenses.items, 0..) |lic, i| {
+            if (i > 0) try stdout.print(", ", .{});
+            try stdout.print("{s}", .{lic.toString()});
+        }
+        try stdout.print("\n\n", .{});
+
+        if (compatible_licenses.len == 0) {
+            try stdout.print("❌ No compatible licenses found!\n", .{});
+            try stdout.print("The licenses you selected have conflicting requirements.\n\n", .{});
+        } else {
+            try stdout.print("✅ You can use any of these licenses for your combined work:\n\n", .{});
+            for (compatible_licenses) |lic| {
+                try stdout.print("  • {s}\n", .{lic.toString()});
+            }
+            try stdout.print("\n", .{});
+        }
+
+        // Show pairwise compatibility details for better understanding
+        if (licenses.items.len > 1) {
+            try stdout.print("Compatibility details:\n", .{});
+            var i: usize = 0;
+            while (i < licenses.items.len - 1) : (i += 1) {
+                var j: usize = i + 1;
+                while (j < licenses.items.len) : (j += 1) {
+                    const compat = compatibility.isCompatible(licenses.items[i], licenses.items[j]);
+                    const reason = compatibility.getCompatibilityReason(licenses.items[i], licenses.items[j]);
+                    const symbol = if (compat) "✓" else "✗";
+                    try stdout.print("  {s} {s} + {s}: {s}\n", .{
+                        symbol,
+                        licenses.items[i].toString(),
+                        licenses.items[j].toString(),
+                        reason,
+                    });
+                }
+            }
+            try stdout.print("\n", .{});
+        }
+
+        try stdout.print("Enter licenses (or 'quit' to exit): ", .{});
+    }
+}
+
+fn runDecisionTree(allocator: std.mem.Allocator, stdout: anytype) !void {
     const stdin = io.getStdIn().reader();
 
     var history = History.init(allocator);
     defer history.deinit();
 
-    var current_node = &decision_tree;
+    var current_node = decision_tree;
     try history.append(current_node);
 
     // Print welcome message
     try stdout.print("\n=== Repolicense CLI ===\n", .{});
     try stdout.print("Welcome to Repolicense! This tool helps you choose the right open-source license.\n", .{});
-    try stdout.print("Answer the questions with 'yes', 'no', 'back', 'reset', or 'quit'.\n\n", .{});
+    try stdout.print("Answer the questions with 'yes', 'no', 'back', 'reset', or 'quit'.\n", .{});
+    try stdout.print("\nTip: Run with 'compat' argument to check license compatibility for forking projects.\n\n", .{});
 
     var buf: [256]u8 = undefined;
 
@@ -356,7 +201,7 @@ pub fn main() !void {
             }
         } else if (mem.eql(u8, lower, "reset") or mem.eql(u8, lower, "r")) {
             history.clearRetainingCapacity();
-            current_node = &decision_tree;
+            current_node = decision_tree;
             try history.append(current_node);
             try stdout.print("\n[Reset to beginning]\n", .{});
         } else if (current_node.node_type == .Question) {

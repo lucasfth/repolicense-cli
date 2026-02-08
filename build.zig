@@ -22,4 +22,24 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    // Test step
+    const tree_tests = b.addTest(.{
+        .root_source_file = b.path("src/tree_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const compatibility_tests = b.addTest(.{
+        .root_source_file = b.path("src/compatibility_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_tree_tests = b.addRunArtifact(tree_tests);
+    const run_compatibility_tests = b.addRunArtifact(compatibility_tests);
+
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_tree_tests.step);
+    test_step.dependOn(&run_compatibility_tests.step);
 }
