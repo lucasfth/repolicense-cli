@@ -2,7 +2,7 @@
 
 <p align="center">
   <img alt="License badge showing the repository is licensed under MIT" src="https://img.shields.io/github/license/lucasfth/repolicense-cli">
-  <img alt="Zig version 0.15.2" src="https://img.shields.io/badge/Zig-0.15.2-%23F7A41D.svg?style=logo=zig&logoColor=white">
+  <img alt="Zig version 0.15.2" src="https://img.shields.io/badge/Zig-0.15.2-%23F7A41D.svg?logo=zig&logoColor=white">
 </p>
 
 A command-line tool to help you choose the right open-source license for your project, implemented in Zig.
@@ -102,7 +102,8 @@ The tool helps you choose from the following licenses:
 - **Public Domain**: Unlicense
 - **Specialized**: OFL-1.1 (for fonts)
 
-> ℹ️ Note: If you wish to add more licenses, please submit a Pull Request with the new license details and update the decision tree accordingly.
+> **ℹ️ Note:**\
+> If you wish to add more licenses, please submit a Pull Request with the new license details and update the decision tree accordingly.
 
 ## Testing
 
