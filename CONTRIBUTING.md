@@ -45,6 +45,8 @@ Also exercise the affected CLI mode. For changes to navigation, try `yes`, `no`,
 
 CI builds and tests pull requests on Linux, macOS, and Windows. Formatting is checked separately on Linux.
 
+CI installs the compiler through `.github/actions/setup-zig/action.yml`, verifies the official release SHA-256 hashes, and caches the compiler with `actions/cache@v5`. Compiler upgrades must update that action's version and platform hashes alongside `build.zig.zon`, the README, and this guide.
+
 ## Code layout
 
 | File | Responsibility |

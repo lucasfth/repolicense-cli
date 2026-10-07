@@ -5,9 +5,24 @@
 </p>
 
 <p align="center">
-  <a href="https://ziglang.org/download/">Zig 0.17.0</a> ·
-  <a href="./LICENSE">Apache-2.0</a> ·
-  <a href="https://github.com/lucasfth/repolicense-cli/actions/workflows/ci.yml">CI</a>
+  <a href="https://ziglang.org/download/">
+    <img alt="Zig 0.17.0" src="https://img.shields.io/badge/Zig-0.17.0-F7A41D?logo=zig&amp;logoColor=white">
+  </a>
+  <a href="./LICENSE">
+    <img alt="License: Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-blue">
+  </a>
+  <a href="https://github.com/lucasfth/repolicense-cli/actions/workflows/ci.yml">
+    <img alt="CI build and test status" src="https://img.shields.io/github/actions/workflow/status/lucasfth/repolicense-cli/ci.yml?branch=main&amp;label=CI&amp;logo=github">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/lucasfth/repolicense-cli/issues">
+    <img alt="Open GitHub issues" src="https://img.shields.io/github/issues/lucasfth/repolicense-cli">
+  </a>
+  <a href="https://github.com/lucasfth/repolicense-cli/pulls">
+    <img alt="Open GitHub pull requests" src="https://img.shields.io/github/issues-pr/lucasfth/repolicense-cli">
+  </a>
 </p>
 
 <p align="center">

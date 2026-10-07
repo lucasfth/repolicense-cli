@@ -1,0 +1,69 @@
+name: Setup Zig
+description: Install the checksum-pinned Zig 0.17.0 compiler
+runs:
+  using: composite
+  steps:
+    - name: Cache compiler
+      id: compiler-cache
+      uses: actions/cache@v5
+      with:
+        path: ${{ runner.temp }}/zig
+        key: zig-0.17.0-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Install compiler
+      if: steps.compiler-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        version=0.17.0
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)
+            platform=x86_64-linux
+            checksum=1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026
+            extension=tar.xz
+            ;;
+          macOS-ARM64)
+            platform=aarch64-macos
+            checksum=b607e9b9234790a008116ae5bdb71c6243b84b9fb42a53a9e70fde41c06c536a
+            extension=tar.xz
+            ;;
+          Windows-X64)
+            platform=x86_64-windows
+            checksum=b5663f69581dcf391293fbf16c06cb80d81d806545ce618b4d0bab7f0eb8c428
+            extension=zip
+            ;;
+          *)
+            echo "Unsupported runner: $RUNNER_OS-$RUNNER_ARCH" >&2
+            exit 1
+            ;;
+        esac
+
+        temp_dir="$RUNNER_TEMP"
+        if [ "$RUNNER_OS" = Windows ]; then
+          temp_dir="$(cygpath -u "$temp_dir")"
+        fi
+        archive="$temp_dir/zig.$extension"
+        install_dir="$temp_dir/zig"
+        curl --fail --location --output "$archive" \
+          "https://ziglang.org/download/$version/zig-$platform-$version.$extension"
+        if [ "$RUNNER_OS" = macOS ]; then
+          printf '%s  %s\n' "$checksum" "$archive" | shasum -a 256 -c -
+        else
+          printf '%s  %s\n' "$checksum" "$archive" | sha256sum -c -
+        fi
+
+        mkdir -p "$install_dir"
+        if [ "$extension" = zip ]; then
+          unzip -q "$archive" -d "$temp_dir"
+          cp -R "$temp_dir/zig-$platform-$version/." "$install_dir/"
+        else
+          tar -xf "$archive" -C "$install_dir" --strip-components=1
+        fi
+
+    - name: Add compiler to PATH
+      shell: bash
+      run: |
+        set -euo pipefail
+        install_dir="$RUNNER_TEMP/zig"
+        printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
+        "$install_dir/zig" version
