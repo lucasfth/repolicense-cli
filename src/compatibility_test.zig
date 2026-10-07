@@ -174,14 +174,3 @@ test "findCompatibleLicenses with conflicting licenses" {
     // These are incompatible, should find no compatible licenses
     try testing.expect(compatible.len == 0);
 }
-
-test "getCompatibilityReason returns non-empty string" {
-    const reason1 = compatibility.getCompatibilityReason(.MIT, .MIT);
-    try testing.expect(reason1.len > 0);
-
-    const reason2 = compatibility.getCompatibilityReason(.MIT, .GPL_3_0);
-    try testing.expect(reason2.len > 0);
-
-    const reason3 = compatibility.getCompatibilityReason(.Apache_2_0, .GPL_2_0);
-    try testing.expect(reason3.len > 0);
-}

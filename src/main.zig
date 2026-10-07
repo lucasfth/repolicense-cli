@@ -4,7 +4,6 @@ const tree = @import("tree.zig");
 const compatibility = @import("compatibility.zig");
 
 const Node = tree.Node;
-const NodeType = tree.NodeType;
 const decision_tree = tree.decision_tree;
 
 const History = std.ArrayList(*const Node);
@@ -15,37 +14,44 @@ const DIM = "\x1b[2m";
 const UNDERLINE = "\x1b[4m";
 const RESET = "\x1b[0m";
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
-    const stdout = std.fs.File.stdout().deprecatedWriter();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_file = std.Io.File.stdout().writer(init.io, &stdout_buffer);
+    const stdout = &stdout_file.interface;
 
-    // Check for command-line arguments
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    var args = try init.minimal.args.iterateAllocator(allocator);
+    defer args.deinit();
+    _ = args.next();
 
     // Check if compatibility mode is requested via flag (`--compat` or `-c`)
     var is_compat: bool = false;
-    for (args[1..]) |a| {
-        if (mem.eql(u8, a, "--compat") or mem.eql(u8, a, "-c")) {
+    while (args.next()) |arg| {
+        if (mem.eql(u8, arg, "--compat") or mem.eql(u8, arg, "-c")) {
             is_compat = true;
             break;
         }
     }
 
     if (is_compat) {
-        try runCompatibilityMode(allocator, stdout);
-        return;
+        try runCompatibilityMode(allocator, init.io, stdout);
+    } else {
+        // Run normal decision tree mode
+        try runDecisionTree(allocator, init.io, stdout);
     }
-
-    // Run normal decision tree mode
-    try runDecisionTree(allocator, stdout);
+    try stdout.flush();
 }
 
-fn runCompatibilityMode(allocator: std.mem.Allocator, stdout: anytype) !void {
-    const stdin = std.fs.File.stdin().deprecatedReader();
+fn readLine(stdin: *std.Io.Reader, stdout: *std.Io.Writer) !?[]u8 {
+    try stdout.flush();
+    return stdin.takeDelimiter('\n');
+}
+
+fn runCompatibilityMode(allocator: std.mem.Allocator, io: std.Io, stdout: anytype) !void {
+    var buf: [1024]u8 = undefined;
+    var stdin_file = std.Io.File.stdin().reader(io, &buf);
+    const stdin = &stdin_file.interface;
 
     try stdout.print("\n=== {s}License Compatibility Checker{s} ===\n", .{ BOLD, RESET });
     try stdout.print("This tool helps you find compatible licenses when forking or combining projects.\n\n", .{});
@@ -58,10 +64,8 @@ fn runCompatibilityMode(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.print("  Other: Unlicense, OFL-1.1\n\n", .{});
     try stdout.print("Enter licenses (or 'quit' to exit): ", .{});
 
-    var buf: [1024]u8 = undefined;
-
     while (true) {
-        const line = (try stdin.readUntilDelimiterOrEof(&buf, '\n')) orelse break;
+        const line = (try readLine(stdin, stdout)) orelse break;
         const trimmed = mem.trim(u8, line, &std.ascii.whitespace);
 
         if (trimmed.len == 0) {
@@ -153,8 +157,10 @@ fn runCompatibilityMode(allocator: std.mem.Allocator, stdout: anytype) !void {
     }
 }
 
-fn runDecisionTree(allocator: std.mem.Allocator, stdout: anytype) !void {
-    const stdin = std.fs.File.stdin().deprecatedReader();
+fn runDecisionTree(allocator: std.mem.Allocator, io: std.Io, stdout: anytype) !void {
+    var buf: [256]u8 = undefined;
+    var stdin_file = std.Io.File.stdin().reader(io, &buf);
+    const stdin = &stdin_file.interface;
     const ui = @import("ui.zig");
 
     var screen = ui.Screen.init();
@@ -170,32 +176,30 @@ fn runDecisionTree(allocator: std.mem.Allocator, stdout: anytype) !void {
     try stdout.print("Answer the questions with 'yes', 'no', 'back', 'reset', or 'quit'\n to find the best license for your project.\n", .{});
     try stdout.print("\nRun with {s}'--compat'{s} flag (or {s}'-c'{s}) to check license compatibility for forking projects.\n\n", .{ UNDERLINE, RESET, UNDERLINE, RESET });
 
-    var buf: [256]u8 = undefined;
-
     while (true) {
         if (current_node.node_type == .Question) {
             const content = if (current_node.elaboration.len > 0)
-                try std.fmt.allocPrint(allocator, "\n--- {s}Question{s} ---\n{s}\n\n{s}Elaboration: {s}\n{s}\nYour answer (yes/no/back/reset/quit): ", .{ ITALIC, RESET, current_node.content, DIM, current_node.elaboration, RESET })
+                try allocator.print("\n--- {s}Question{s} ---\n{s}\n\n{s}Elaboration: {s}\n{s}\nYour answer (yes/no/back/reset/quit): ", .{ ITALIC, RESET, current_node.content, DIM, current_node.elaboration, RESET })
             else
-                try std.fmt.allocPrint(allocator, "\n--- {s}Question{s} ---\n{s}\nYour answer (yes/no/back/reset/quit): ", .{ ITALIC, RESET, current_node.content });
+                try allocator.print("\n--- {s}Question{s} ---\n{s}\nYour answer (yes/no/back/reset/quit): ", .{ ITALIC, RESET, current_node.content });
 
             try screen.render(stdout, content);
             allocator.free(content);
         } else {
             var content = if (current_node.elaboration.len > 0)
-                try std.fmt.allocPrint(allocator, "\n--- {s}RESULT{s} ---\nLicense: {s}{s}{s}\n\n{s}{s}{s}\n", .{ BOLD, RESET, BOLD, current_node.content, RESET, DIM, current_node.elaboration, RESET })
+                try allocator.print("\n--- {s}RESULT{s} ---\nLicense: {s}{s}{s}\n\n{s}{s}{s}\n", .{ BOLD, RESET, BOLD, current_node.content, RESET, DIM, current_node.elaboration, RESET })
             else
-                try std.fmt.allocPrint(allocator, "\n--- {s}RESULT{s} ---\nLicense: {s}{s}{s}\n", .{ BOLD, RESET, BOLD, current_node.content, RESET });
+                try allocator.print("\n--- {s}RESULT{s} ---\nLicense: {s}{s}{s}\n", .{ BOLD, RESET, BOLD, current_node.content, RESET });
 
             if (!mem.startsWith(u8, current_node.content, "Consider") and !mem.startsWith(u8, current_node.content, "You should")) {
-                const links = try std.fmt.allocPrint(allocator, "\nFor more information, visit:\nhttps://api.github.com/licenses/{s}\nhttps://docs.github.com/en/rest/licenses/licenses\n", .{current_node.content});
-                const combined = try std.fmt.allocPrint(allocator, "{s}{s}", .{ content, links });
+                const links = try allocator.print("\nFor more information, visit:\nhttps://api.github.com/licenses/{s}\nhttps://docs.github.com/en/rest/licenses/licenses\n", .{current_node.content});
+                const combined = try allocator.print("{s}{s}", .{ content, links });
                 allocator.free(content);
                 allocator.free(links);
                 content = combined;
             }
 
-            const content_with_options = try std.fmt.allocPrint(allocator, "{s}\nOptions: back/reset/quit: ", .{content});
+            const content_with_options = try allocator.print("{s}\nOptions: back/reset/quit: ", .{content});
             allocator.free(content);
             content = content_with_options;
 
@@ -203,7 +207,7 @@ fn runDecisionTree(allocator: std.mem.Allocator, stdout: anytype) !void {
             allocator.free(content);
         }
 
-        const line = (try stdin.readUntilDelimiterOrEof(&buf, '\n')) orelse break;
+        const line = (try readLine(stdin, stdout)) orelse break;
         const trimmed = mem.trim(u8, line, &std.ascii.whitespace);
         const lower = try std.ascii.allocLowerString(allocator, trimmed);
         defer allocator.free(lower);

@@ -12,7 +12,7 @@ const CaptureWriter = struct {
     }
 
     pub fn print(self: *CaptureWriter, comptime fmt: []const u8, args: anytype) !void {
-        const s = try std.fmt.allocPrint(self.allocator, fmt, args);
+        const s = try self.allocator.print(fmt, args);
         defer self.allocator.free(s);
         for (s) |c| {
             try self.buf.append(self.allocator, c);

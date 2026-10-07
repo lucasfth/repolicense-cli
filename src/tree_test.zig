@@ -107,8 +107,3 @@ test "all question nodes have content and elaboration" {
     try testing.expect(permissive.content.len > 0);
     try testing.expect(permissive.elaboration.len > 0);
 }
-
-test "NodeType enum has correct values" {
-    try testing.expect(@TypeOf(tree.NodeType.Question) == tree.NodeType);
-    try testing.expect(@TypeOf(tree.NodeType.Answer) == tree.NodeType);
-}

@@ -1,128 +1,135 @@
-# repolicense-cli
+<h1 align="center">Repolicense CLI</h1>
 
 <p align="center">
-  <img alt="License badge showing the repository is licensed under MIT" src="https://img.shields.io/github/license/lucasfth/repolicense-cli">
-  <img alt="Zig version 0.15.2" src="https://img.shields.io/badge/Zig-0.15.2-%23F7A41D.svg?logo=zig&logoColor=white">
+  Choose an open-source license. Check compatibility before combining code.
 </p>
 
-A command-line tool to help you choose the right open-source license for your project, implemented in Zig.
+<p align="center">
+  <a href="https://ziglang.org/download/">Zig 0.17.0</a> ·
+  <a href="./LICENSE">Apache-2.0</a> ·
+  <a href="https://github.com/lucasfth/repolicense-cli/actions/workflows/ci.yml">CI</a>
+</p>
 
-This is a CLI version of [repolicense](https://github.com/lucasfth/repolicense), which guides you through a series of questions to determine the most suitable license for your needs.
+<p align="center">
+  <a href="#getting-started">Get started</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="./CONTRIBUTING.md">Contribute</a> ·
+  <a href="https://github.com/lucasfth/repolicense-cli/issues">Report an issue</a>
+</p>
 
-## Features
+---
 
-- Interactive question-and-answer interface
-- Navigate forward and backward through the decision tree
-- Reset at any time to start over
-- Get detailed information about each license
-- Links to GitHub API for license details
-- **NEW**: License compatibility checker for forking projects
-    This feature allows you to input a list of existing licenses and find out which licenses are compatible with all of them when combining code from multiple projects.
+A terminal companion to [repolicense](https://github.com/lucasfth/repolicense), built with Zig and its standard library. Answer a series of questions to explore licenses for your project, or enter existing licenses to check the compatibility rules for combining code.
 
-## Prerequisites
+- **License selection** — a yes/no decision tree with explanations and links to license details.
+- **Navigation** — go back to an earlier question or reset the session.
+- **Compatibility checks** — compare comma-separated licenses and see the reasons behind each pairing.
+- **Local operation** — no account, service, or runtime dependency; the CLI provides links rather than making API calls.
 
-- [Zig](https://ziglang.org/download/) version 0.15.2 or later
+> This tool offers general guidance, not legal advice. Review the actual license terms and your project's obligations before choosing a license or combining code.
 
-## Building
+## Contents
 
-```bash
+- [Getting started](#getting-started)
+- [Usage](#usage)
+- [Supported licenses](#supported-licenses)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License and acknowledgments](#license-and-acknowledgments)
+
+## Getting started
+
+Install [Zig 0.17.0](https://ziglang.org/download/), the version used by CI. Zig is still pre-1.0; newer compiler releases may require source changes.
+
+```sh
+git clone https://github.com/lucasfth/repolicense-cli.git
+cd repolicense-cli
 zig build
-```
-
-## Running
-
-After building, run the executable:
-
-```bash
 ./zig-out/bin/repolicense
 ```
 
-Or build and run in one command:
+On Windows, the executable is `zig-out/bin/repolicense.exe`.
 
-```bash
+To build and run in one step:
+
+```sh
 zig build run
 ```
 
-### License Compatibility
+### Install the terminal command
 
-To check which licenses you can use when forking or combining projects:
+On macOS or Linux, install a release build under your user prefix:
 
-```bash
-./zig-out/bin/repolicense --compat
+```sh
+zig build -Doptimize=ReleaseSafe --prefix "$HOME/.local"
+repolicense
 ```
 
-This mode helps you determine compatible licenses when you want to combine code from multiple projects with different licenses.
+Ensure `$HOME/.local/bin` is on your shell's `PATH`. Repeat the build command after pulling updates to refresh the installed executable.
 
 ## Usage
 
-### License Selection Mode (Default)
+### Choose a license
 
-The tool will ask you a series of yes/no questions about your project requirements. Based on your answers, it will recommend an appropriate open-source license.
+Start without arguments and answer the questions about your project. You can revisit answers at any point, including after reaching a recommendation.
 
-Available commands:
+| Input | Action |
+| --- | --- |
+| `yes` or `y` | Answer yes |
+| `no` or `n` | Answer no |
+| `back` or `b` | Return to the previous question |
+| `reset` or `r` | Start again |
+| `quit`, `q`, or `exit` | End the session |
 
-- `yes` or `y` - Answer yes to the current question
-- `no` or `n` - Answer no to the current question
-- `back` or `b` - Go back to the previous question
-- `reset` or `r` - Start over from the beginning
-- `quit` or `q` - Exit the program
+### Check compatibility
 
-### License Compatibility Mode
+```sh
+zig build run -- --compat
+```
 
-Run with the `--compat` flag (or `-c`) to check license compatibility:
+Or run the built executable with `--compat` (short form: `-c`):
 
-```bash
+```sh
 ./zig-out/bin/repolicense --compat
 ```
 
-This mode allows you to:
+At the prompt, enter SPDX-style identifiers separated by commas:
 
-- Enter a comma-separated list of licenses from projects you want to combine
-- See which licenses are compatible with all of them
-- Understand why certain combinations are compatible or not
-
-Example:
-
-```bash
-Enter licenses: MIT, Apache-2.0
-You can use any of these licenses for your combined work:
-  • MIT
-  • BSD-2-Clause
-  • Apache-2.0
-  • GPL-3.0
-  ...
+```text
+MIT, Apache-2.0
 ```
 
-## Supported Licenses
+The checker lists the licenses its rules permit for the combined work and explains pairwise compatibility. License identifiers are case-insensitive. Enter another list to check a different combination, or `quit` / `q` to leave.
 
-The tool helps you choose from the following licenses:
+## Supported licenses
 
-- **Permissive**: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD, ISC
-- **Copyleft**: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-3.0, MPL-2.0, EPL-1.0, EPL-2.0
-- **Public Domain**: Unlicense
-- **Specialized**: OFL-1.1 (for fonts)
+| Category | Identifiers |
+| --- | --- |
+| Permissive | `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Apache-2.0`, `0BSD`, `ISC` |
+| Strong copyleft | `GPL-2.0`, `GPL-3.0`, `AGPL-3.0` |
+| Weak copyleft | `LGPL-3.0`, `MPL-2.0`, `EPL-1.0`, `EPL-2.0` |
+| Public-domain dedication | `Unlicense` |
+| Fonts | `OFL-1.1` |
 
-> **ℹ️ Note:**\
-> If you wish to add more licenses, please submit a Pull Request with the new license details and update the decision tree accordingly.
+These are the identifiers understood by the CLI; the checker does not model every license exception or variant.
 
-## Testing
+## Development
 
-Run the test suite:
-
-```bash
+```sh
 zig build test
+zig fmt --check src/
 ```
 
-The test suite includes:
+The existing tests cover decision-tree paths, license parsing and compatibility rules, and terminal-screen rendering. [CI](https://github.com/lucasfth/repolicense-cli/actions/workflows/ci.yml) builds and tests on Linux, macOS, and Windows using Zig 0.17.0, with a separate formatting check.
 
-- Decision tree structure validation
-- License compatibility logic tests
-- Navigation and path verification
+For the decision-tree layout and project background, see [Tree structure](./TREE_STRUCTURE.md) and [Web/CLI comparison](./COMPARISON.md).
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request and follow the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md).
+Read the [contribution guide](./CONTRIBUTING.md) for setup and license additions. Bug reports and proposed improvements belong in [GitHub issues](https://github.com/lucasfth/repolicense-cli/issues); code changes are welcome through pull requests.
 
-## Acknowledgments
+## License and acknowledgments
 
-Based on the original [repolicense](https://github.com/lucasfth/repolicense) web application.
+Licensed under [Apache License 2.0](./LICENSE).
+
+The decision tree is based on the original [repolicense web application](https://github.com/lucasfth/repolicense).
