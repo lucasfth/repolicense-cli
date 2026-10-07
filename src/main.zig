@@ -2,6 +2,7 @@ const std = @import("std");
 const mem = std.mem;
 const tree = @import("tree.zig");
 const compatibility = @import("compatibility.zig");
+const catalog = @import("licenses.zig");
 
 const Node = tree.Node;
 const decision_tree = tree.decision_tree;
@@ -35,7 +36,7 @@ pub fn main(init: std.process.Init) !void {
     }
 
     if (is_compat) {
-        try runCompatibilityMode(allocator, init.io, stdout);
+        try runCompatibilityMode(init.io, stdout);
     } else {
         // Run normal decision tree mode
         try runDecisionTree(allocator, init.io, stdout);
@@ -48,111 +49,111 @@ fn readLine(stdin: *std.Io.Reader, stdout: *std.Io.Writer) !?[]u8 {
     return stdin.takeDelimiter('\n');
 }
 
-fn runCompatibilityMode(allocator: std.mem.Allocator, io: std.Io, stdout: anytype) !void {
+fn runCompatibilityMode(io: std.Io, stdout: anytype) !void {
     var buf: [1024]u8 = undefined;
     var stdin_file = std.Io.File.stdin().reader(io, &buf);
     const stdin = &stdin_file.interface;
 
     try stdout.print("\n=== {s}License Compatibility Checker{s} ===\n", .{ BOLD, RESET });
-    try stdout.print("This tool helps you find compatible licenses when forking or combining projects.\n\n", .{});
-    try stdout.print("Enter the licenses of the projects you want to combine (comma-separated).\n", .{});
-    try stdout.print("Example: MIT, Apache-2.0, BSD-3-Clause\n\n", .{});
-    try stdout.print("Supported licenses:\n", .{});
-    try stdout.print("  Permissive: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD, ISC\n", .{});
-    try stdout.print("  Copyleft: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-3.0\n", .{});
-    try stdout.print("  Weak Copyleft: MPL-2.0, EPL-2.0, EPL-1.0\n", .{});
-    try stdout.print("  Other: Unlicense, OFL-1.1\n\n", .{});
-    try stdout.print("Enter licenses (or 'quit' to exit): ", .{});
+    try stdout.print("Check licenses for a covered combined work, not merely separate projects in one repository.\n", .{});
+    try stdout.print("Original notices and component obligations remain. Conditional results require the stated conditions.\n", .{});
+    try stdout.print("Exceptions, dual-license expressions, jurisdiction, and unlisted versions are not modeled; this is not legal advice.\n\n", .{});
+    try stdout.print("Enter comma-separated canonical SPDX identifiers, for example: MIT, Apache-2.0\n", .{});
+    try stdout.print("GNU identifiers must specify '-only' or '-or-later'.\n\nSupported licenses:\n", .{});
+    for ([_]catalog.Category{ .Permissive, .StrongCopyleft, .WeakCopyleft, .PublicDomain, .Font }) |category| {
+        try stdout.print("  {s}: ", .{@tagName(category)});
+        var first = true;
+        for (catalog.all) |license| {
+            if (license.getCategory() != category) continue;
+            if (!first) try stdout.print(", ", .{});
+            try stdout.print("{s}", .{license.toString()});
+            first = false;
+        }
+        try stdout.print("\n", .{});
+    }
+    try stdout.print("\nEnter licenses (or 'quit' to exit): ", .{});
 
     while (true) {
         const line = (try readLine(stdin, stdout)) orelse break;
         const trimmed = mem.trim(u8, line, &std.ascii.whitespace);
-
+        if (std.ascii.eqlIgnoreCase(trimmed, "quit") or std.ascii.eqlIgnoreCase(trimmed, "q")) {
+            try stdout.print("\nThank you for using the compatibility checker of Repolicense\n", .{});
+            break;
+        }
         if (trimmed.len == 0) {
             try stdout.print("\nEnter licenses (or 'quit' to exit): ", .{});
             continue;
         }
 
-        if (mem.eql(u8, trimmed, "quit") or mem.eql(u8, trimmed, "q")) {
-            try stdout.print("\nThank you for using the compatibility checker of Repolicense\n", .{});
-            break;
-        }
-
-        // Parse comma-separated licenses
-        var licenses = try std.ArrayList(compatibility.License).initCapacity(allocator, 0);
-        defer licenses.deinit(allocator);
-
-        var iter = std.mem.tokenizeAny(u8, trimmed, ",");
+        var selected: [catalog.all.len]catalog.License = undefined;
+        var count: usize = 0;
+        var iter = mem.tokenizeAny(u8, trimmed, ",");
         var has_error = false;
-
         while (iter.next()) |license_str| {
             const clean = mem.trim(u8, license_str, &std.ascii.whitespace);
             if (clean.len == 0) continue;
-
-            if (compatibility.License.fromString(clean)) |lic| {
-                try licenses.append(allocator, lic);
-            } else {
-                try stdout.print("\nError: Unknown license '{s}'\n", .{clean});
+            const license = catalog.License.fromString(clean) orelse {
+                try stdout.print("\nError: Unknown or ambiguous license '{s}'. Use a supported canonical identifier; GNU licenses require '-only' or '-or-later'.\n", .{clean});
                 has_error = true;
                 break;
+            };
+            var duplicate = false;
+            for (selected[0..count]) |previous| {
+                if (previous == license) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                selected[count] = license;
+                count += 1;
             }
         }
-
-        if (has_error) {
+        if (has_error or count == 0) {
+            if (!has_error) try stdout.print("\nError: No valid licenses entered\n", .{});
             try stdout.print("\nEnter licenses (or 'quit' to exit): ", .{});
             continue;
         }
 
-        if (licenses.items.len == 0) {
-            try stdout.print("\nError: No valid licenses entered\n", .{});
-            try stdout.print("\nEnter licenses (or 'quit' to exit): ", .{});
-            continue;
-        }
+        const input_licenses = selected[0..count];
+        var candidates_buffer: [catalog.all.len]compatibility.Candidate = undefined;
+        const candidates = compatibility.findCandidates(input_licenses, &candidates_buffer);
 
-        // Find compatible licenses
-        const compatible_licenses = try compatibility.findCompatibleLicenses(allocator, licenses.items);
-        defer allocator.free(compatible_licenses);
-
-        try stdout.print("\n--- {s}Results{s} ---\n", .{ BOLD, RESET });
-        try stdout.print("Given licenses: ", .{});
-        for (licenses.items, 0..) |lic, i| {
+        try stdout.print("\n--- {s}Results{s} ---\nGiven licenses: ", .{ BOLD, RESET });
+        for (input_licenses, 0..) |license, i| {
             if (i > 0) try stdout.print(", ", .{});
-            try stdout.print("{s}", .{lic.toString()});
+            try stdout.print("{s}", .{license.toString()});
         }
         try stdout.print("\n\n", .{});
-
-        if (compatible_licenses.len == 0) {
-            try stdout.print("No compatible licenses found!\n", .{});
-            try stdout.print("The licenses you selected have conflicting requirements.\n\n", .{});
+        if (candidates.len == 0) {
+            try stdout.print("No combined-work target found under these rules.\n", .{});
+            try stdout.print("This does not rule out independent aggregation or separately granted permissions.\n\n", .{});
         } else {
-            try stdout.print("You can use any of these licenses for your combined work:\n\n", .{});
-            for (compatible_licenses) |lic| {
-                try stdout.print("  • {s}\n", .{lic.toString()});
-            }
-            try stdout.print("\n", .{});
-        }
-
-        // Show pairwise compatibility details for better understanding
-        if (licenses.items.len > 1) {
-            try stdout.print("Compatibility details:\n", .{});
-            var i: usize = 0;
-            while (i < licenses.items.len - 1) : (i += 1) {
-                var j: usize = i + 1;
-                while (j < licenses.items.len) : (j += 1) {
-                    const compat = compatibility.isCompatible(licenses.items[i], licenses.items[j]);
-                    const reason = compatibility.getCompatibilityReason(licenses.items[i], licenses.items[j]);
-                    const symbol = if (compat) "✓" else "✗";
-                    try stdout.print("  {s} {s} + {s}: {s}\n", .{
-                        symbol,
-                        licenses.items[i].toString(),
-                        licenses.items[j].toString(),
-                        reason,
-                    });
+            try stdout.print("Combined-work targets; retain required notices and applicable component obligations:\n", .{});
+            for (candidates) |candidate| {
+                try stdout.print("  [{s}] {s}\n", .{ @tagName(candidate.status), candidate.license.toString() });
+                if (candidate.status == .conditional) {
+                    for (input_licenses) |source| {
+                        const assessment = compatibility.assess(source, candidate.license);
+                        if (assessment.status == .conditional) {
+                            try stdout.print("    {s}: {s}\n", .{ source.toString(), assessment.reason });
+                        }
+                    }
                 }
             }
             try stdout.print("\n", .{});
         }
 
+        if (count > 1) {
+            try stdout.print("Pairwise common-target checks (not permission to relicense either component):\n", .{});
+            for (input_licenses, 0..) |a, i| {
+                for (input_licenses[i + 1 ..]) |b| {
+                    const assessment = compatibility.assessPair(a, b);
+                    try stdout.print("  [{s}] {s} + {s}: {s}\n", .{ @tagName(assessment.status), a.toString(), b.toString(), assessment.reason });
+                }
+            }
+            try stdout.print("\n", .{});
+        }
         try stdout.print("Enter licenses (or 'quit' to exit): ", .{});
     }
 }
@@ -173,8 +174,9 @@ fn runDecisionTree(allocator: std.mem.Allocator, io: std.Io, stdout: anytype) !v
 
     // Print welcome message (kept as regular prints so it doesn't get cleared)
     try stdout.print("\n=== {s}Repolicense CLI{s} ===\n", .{ BOLD, RESET });
-    try stdout.print("Answer the questions with 'yes', 'no', 'back', 'reset', or 'quit'\n to find the best license for your project.\n", .{});
-    try stdout.print("\nRun with {s}'--compat'{s} flag (or {s}'-c'{s}) to check license compatibility for forking projects.\n\n", .{ UNDERLINE, RESET, UNDERLINE, RESET });
+    try stdout.print("Answer with 'yes', 'no', 'back', 'reset', or 'quit' to explore a suitable license.\n", .{});
+    try stdout.print("Recommendations explain obligations; they are not legal advice or permission to replace third-party licenses.\n", .{});
+    try stdout.print("\nRun with {s}'--compat'{s} (or {s}'-c'{s}) to check combinations of existing licenses.\n\n", .{ UNDERLINE, RESET, UNDERLINE, RESET });
 
     while (true) {
         if (current_node.node_type == .Question) {
@@ -186,41 +188,27 @@ fn runDecisionTree(allocator: std.mem.Allocator, io: std.Io, stdout: anytype) !v
             try screen.render(stdout, content);
             allocator.free(content);
         } else {
-            var content = if (current_node.elaboration.len > 0)
-                try allocator.print("\n--- {s}RESULT{s} ---\nLicense: {s}{s}{s}\n\n{s}{s}{s}\n", .{ BOLD, RESET, BOLD, current_node.content, RESET, DIM, current_node.elaboration, RESET })
+            const content = if (current_node.license) |license|
+                try allocator.print("\n--- {s}RESULT{s} ---\nLicense: {s}{s}{s}\n\n{s}\n\nLicense text: {s}\n\nOptions: back/reset/quit: ", .{ BOLD, RESET, BOLD, license.toString(), RESET, current_node.elaboration, license.url() })
             else
-                try allocator.print("\n--- {s}RESULT{s} ---\nLicense: {s}{s}{s}\n", .{ BOLD, RESET, BOLD, current_node.content, RESET });
-
-            if (!mem.startsWith(u8, current_node.content, "Consider") and !mem.startsWith(u8, current_node.content, "You should")) {
-                const links = try allocator.print("\nFor more information, visit:\nhttps://api.github.com/licenses/{s}\nhttps://docs.github.com/en/rest/licenses/licenses\n", .{current_node.content});
-                const combined = try allocator.print("{s}{s}", .{ content, links });
-                allocator.free(content);
-                allocator.free(links);
-                content = combined;
-            }
-
-            const content_with_options = try allocator.print("{s}\nOptions: back/reset/quit: ", .{content});
-            allocator.free(content);
-            content = content_with_options;
-
+                try allocator.print("\n--- {s}GUIDANCE{s} ---\n{s}{s}{s}\n\n{s}\n\nOptions: back/reset/quit: ", .{ BOLD, RESET, BOLD, current_node.content, RESET, current_node.elaboration });
             try screen.render(stdout, content);
             allocator.free(content);
         }
 
         const line = (try readLine(stdin, stdout)) orelse break;
         const trimmed = mem.trim(u8, line, &std.ascii.whitespace);
-        const lower = try std.ascii.allocLowerString(allocator, trimmed);
-        defer allocator.free(lower);
+        const answer = trimmed;
 
         // Clear previous rendered block and the input line the user just entered
         try screen.clearIncludingInput(stdout);
 
-        if (mem.eql(u8, lower, "quit") or mem.eql(u8, lower, "q") or mem.eql(u8, lower, "exit")) {
+        if (std.ascii.eqlIgnoreCase(answer, "quit") or std.ascii.eqlIgnoreCase(answer, "q") or std.ascii.eqlIgnoreCase(answer, "exit")) {
             // Clear last rendered block before exiting
             try screen.clear(stdout);
             try stdout.print("\nThank you for using Repolicense\n", .{});
             break;
-        } else if (mem.eql(u8, lower, "back") or mem.eql(u8, lower, "b")) {
+        } else if (std.ascii.eqlIgnoreCase(answer, "back") or std.ascii.eqlIgnoreCase(answer, "b")) {
             if (history.items.len > 1) {
                 _ = history.pop();
                 current_node = history.items[history.items.len - 1];
@@ -229,18 +217,18 @@ fn runDecisionTree(allocator: std.mem.Allocator, io: std.Io, stdout: anytype) !v
             } else {
                 try screen.render(stdout, "[Already at the beginning]\n");
             }
-        } else if (mem.eql(u8, lower, "reset") or mem.eql(u8, lower, "r")) {
+        } else if (std.ascii.eqlIgnoreCase(answer, "reset") or std.ascii.eqlIgnoreCase(answer, "r")) {
             history.clearRetainingCapacity();
             current_node = &decision_tree;
             try history.append(allocator, current_node);
             try screen.render(stdout, "[Reset to beginning]\n");
         } else if (current_node.node_type == .Question) {
-            if (mem.eql(u8, lower, "yes") or mem.eql(u8, lower, "y")) {
+            if (std.ascii.eqlIgnoreCase(answer, "yes") or std.ascii.eqlIgnoreCase(answer, "y")) {
                 if (current_node.yes) |next_node| {
                     current_node = next_node;
                     try history.append(allocator, current_node);
                 }
-            } else if (mem.eql(u8, lower, "no") or mem.eql(u8, lower, "n")) {
+            } else if (std.ascii.eqlIgnoreCase(answer, "no") or std.ascii.eqlIgnoreCase(answer, "n")) {
                 if (current_node.no) |next_node| {
                     current_node = next_node;
                     try history.append(allocator, current_node);

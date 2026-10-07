@@ -1,176 +1,167 @@
 const std = @import("std");
 const testing = std.testing;
 const compatibility = @import("compatibility.zig");
+const License = @import("licenses.zig").License;
 
-test "License fromString and toString roundtrip" {
-    const licenses = [_][]const u8{
-        "MIT",
-        "BSD-2-Clause",
-        "Apache-2.0",
-        "GPL-3.0",
-        "LGPL-3.0",
-    };
+fn expectStatus(existing: License, target: License, expected: compatibility.Status) !void {
+    try testing.expectEqual(expected, compatibility.assess(existing, target).status);
+}
 
-    for (licenses) |license_str| {
-        const lic = compatibility.License.fromString(license_str);
-        try testing.expect(lic != null);
-        try testing.expectEqualStrings(license_str, lic.?.toString());
+test "canonical SPDX names parse and obsolete bare GNU identifiers are rejected" {
+    for ([_][]const u8{
+        "BSL-1.0",       "Zlib",              "GPL-2.0-only",  "GPL-2.0-or-later",
+        "GPL-3.0-only",  "GPL-3.0-or-later",  "AGPL-3.0-only", "AGPL-3.0-or-later",
+        "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+    }) |id| {
+        const parsed = License.fromString(id) orelse return error.ExpectedCanonicalLicense;
+        try testing.expectEqualStrings(id, parsed.toString());
+    }
+    for ([_][]const u8{ "GPL-2.0", "GPL-3.0", "AGPL-3.0", "LGPL-2.1", "LGPL-3.0" }) |id| {
+        try testing.expect(License.fromString(id) == null);
     }
 }
 
-test "License fromString returns null for invalid input" {
-    try testing.expect(compatibility.License.fromString("Invalid") == null);
-    try testing.expect(compatibility.License.fromString("") == null);
+test "permissive licenses may cover a combined work without erasing source notices" {
+    try expectStatus(.MIT, .@"Apache-2.0", .compatible);
+    try expectStatus(.@"BSD-3-Clause", .@"GPL-3.0-only", .compatible);
+    try expectStatus(.@"Apache-2.0", .@"GPL-3.0-only", .compatible);
+    try expectStatus(.Unlicense, .@"GPL-2.0-only", .compatible);
+    try expectStatus(.MIT, .@"0BSD", .conditional);
 }
 
-test "License fromString is case-insensitive" {
-    try testing.expect(compatibility.License.fromString("mit") != null);
-    try testing.expect(compatibility.License.fromString("MIT") != null);
-    try testing.expect(compatibility.License.fromString("Mit") != null);
-    try testing.expectEqual(compatibility.License.MIT, compatibility.License.fromString("mit").?);
-    try testing.expectEqual(compatibility.License.Apache_2_0, compatibility.License.fromString("apache-2.0").?);
+test "GPL version and later-version permissions are directional" {
+    try expectStatus(.@"GPL-2.0-only", .@"GPL-2.0-only", .compatible);
+    try expectStatus(.@"GPL-2.0-only", .@"GPL-2.0-or-later", .incompatible);
+    try expectStatus(.@"GPL-2.0-only", .@"GPL-3.0-only", .incompatible);
+    try expectStatus(.@"GPL-2.0-or-later", .@"GPL-3.0-only", .compatible);
+    try expectStatus(.@"GPL-3.0-only", .@"GPL-3.0-or-later", .incompatible);
+    try expectStatus(.@"GPL-3.0-or-later", .@"GPL-3.0-only", .compatible);
+    try expectStatus(.@"Apache-2.0", .@"GPL-2.0-only", .incompatible);
+    try expectStatus(.@"Apache-2.0", .@"GPL-2.0-or-later", .incompatible);
+    try expectStatus(.@"Apache-2.0", .@"GPL-3.0-only", .compatible);
 }
 
-test "getCategory returns correct categories" {
-    try testing.expect(compatibility.License.MIT.getCategory() == .Permissive);
-    try testing.expect(compatibility.License.Apache_2_0.getCategory() == .Permissive);
-    try testing.expect(compatibility.License.GPL_3_0.getCategory() == .StrongCopyleft);
-    try testing.expect(compatibility.License.AGPL_3_0.getCategory() == .StrongCopyleft);
-    try testing.expect(compatibility.License.LGPL_3_0.getCategory() == .WeakCopyleft);
-    try testing.expect(compatibility.License.MPL_2_0.getCategory() == .WeakCopyleft);
-    try testing.expect(compatibility.License.Unlicense.getCategory() == .PublicDomain);
-    try testing.expect(compatibility.License.OFL_1_1.getCategory() == .Specialized);
+test "AGPL section 13 combinations retain each module license" {
+    try expectStatus(.@"GPL-3.0-only", .@"AGPL-3.0-only", .conditional);
+    try expectStatus(.@"AGPL-3.0-only", .@"GPL-3.0-only", .incompatible);
+    try expectStatus(.@"AGPL-3.0-or-later", .@"GPL-3.0-only", .incompatible);
+    try expectStatus(.@"AGPL-3.0-only", .@"AGPL-3.0-or-later", .incompatible);
 }
 
-test "same license is always compatible" {
-    try testing.expect(compatibility.isCompatible(.MIT, .MIT));
-    try testing.expect(compatibility.isCompatible(.GPL_3_0, .GPL_3_0));
-    try testing.expect(compatibility.isCompatible(.Apache_2_0, .Apache_2_0));
+test "LGPL conversion and separate-library linking require the correct treatment" {
+    try expectStatus(.@"LGPL-2.1-only", .@"GPL-2.0-only", .compatible);
+    try expectStatus(.@"LGPL-2.1-only", .@"GPL-3.0-or-later", .compatible);
+    try expectStatus(.@"LGPL-2.1-only", .@"GPL-3.0-only", .compatible);
+    try expectStatus(.@"LGPL-2.1-only", .@"LGPL-3.0-only", .incompatible);
+    try expectStatus(.@"LGPL-3.0-only", .@"GPL-3.0-or-later", .incompatible);
+    try expectStatus(.@"LGPL-3.0-or-later", .@"GPL-3.0-only", .compatible);
+    try expectStatus(.@"LGPL-3.0-or-later", .@"GPL-3.0-or-later", .compatible);
+    try expectStatus(.@"LGPL-2.1-only", .@"Apache-2.0", .conditional);
 }
 
-test "Unlicense is compatible with everything" {
-    try testing.expect(compatibility.isCompatible(.Unlicense, .MIT));
-    try testing.expect(compatibility.isCompatible(.Unlicense, .GPL_3_0));
-    try testing.expect(compatibility.isCompatible(.Unlicense, .Apache_2_0));
-    try testing.expect(compatibility.isCompatible(.Unlicense, .LGPL_3_0));
+test "MPL and EPL secondary-license requirements are not blanket compatibility" {
+    try expectStatus(.@"MPL-2.0", .MIT, .conditional);
+    try expectStatus(.@"MPL-2.0", .@"GPL-3.0-only", .conditional);
+    try expectStatus(.@"EPL-2.0", .@"GPL-3.0-only", .conditional);
+    try expectStatus(.@"EPL-1.0", .@"GPL-3.0-only", .incompatible);
+    try expectStatus(.@"EPL-1.0", .MIT, .conditional);
 }
 
-test "MIT is broadly compatible" {
-    try testing.expect(compatibility.isCompatible(.MIT, .MIT));
-    try testing.expect(compatibility.isCompatible(.MIT, .Apache_2_0));
-    try testing.expect(compatibility.isCompatible(.MIT, .GPL_3_0));
-    try testing.expect(compatibility.isCompatible(.MIT, .BSD_3_Clause));
-    try testing.expect(!compatibility.isCompatible(.MIT, .OFL_1_1)); // Font license is specialized
+test "OFL remains font-scoped and requires separate font terms when bundled" {
+    try expectStatus(.@"OFL-1.1", .@"OFL-1.1", .compatible);
+    try expectStatus(.@"OFL-1.1", .MIT, .conditional);
+    try expectStatus(.MIT, .@"OFL-1.1", .incompatible);
+    try expectStatus(.@"OFL-1.1", .@"GPL-3.0-only", .conditional);
 }
 
-test "Apache-2.0 and GPL-2.0 are incompatible" {
-    try testing.expect(!compatibility.isCompatible(.Apache_2_0, .GPL_2_0));
-}
+test "candidate list intersects every source and rejects empty input" {
+    var out: [@import("licenses.zig").all.len]compatibility.Candidate = undefined;
+    const empty = compatibility.findCandidates(&.{}, &out);
+    try testing.expectEqual(@as(usize, 0), empty.len);
 
-test "Apache-2.0 is compatible with GPL-3.0" {
-    try testing.expect(compatibility.isCompatible(.Apache_2_0, .GPL_3_0));
-}
+    const conflict = [_]License{ .@"GPL-2.0-only", .@"Apache-2.0" };
+    const candidates = compatibility.findCandidates(&conflict, &out);
+    try testing.expectEqual(@as(usize, 0), candidates.len);
 
-test "GPL-3.0 is restrictive in compatibility" {
-    try testing.expect(compatibility.isCompatible(.GPL_3_0, .GPL_3_0));
-    try testing.expect(compatibility.isCompatible(.GPL_3_0, .AGPL_3_0));
-    try testing.expect(!compatibility.isCompatible(.GPL_3_0, .MIT));
-    try testing.expect(!compatibility.isCompatible(.GPL_3_0, .Apache_2_0));
-    try testing.expect(!compatibility.isCompatible(.GPL_3_0, .LGPL_3_0));
-}
-
-test "AGPL-3.0 is most restrictive" {
-    try testing.expect(compatibility.isCompatible(.AGPL_3_0, .AGPL_3_0));
-    try testing.expect(!compatibility.isCompatible(.AGPL_3_0, .GPL_3_0));
-    try testing.expect(!compatibility.isCompatible(.AGPL_3_0, .MIT));
-}
-
-test "LGPL-3.0 allows more combinations" {
-    try testing.expect(compatibility.isCompatible(.LGPL_3_0, .MIT));
-    try testing.expect(compatibility.isCompatible(.LGPL_3_0, .Apache_2_0));
-    try testing.expect(compatibility.isCompatible(.LGPL_3_0, .GPL_3_0));
-    try testing.expect(compatibility.isCompatible(.LGPL_3_0, .MPL_2_0));
-}
-
-test "MPL-2.0 weak copyleft compatibility" {
-    try testing.expect(compatibility.isCompatible(.MPL_2_0, .MIT));
-    try testing.expect(compatibility.isCompatible(.MPL_2_0, .Apache_2_0));
-    try testing.expect(compatibility.isCompatible(.MPL_2_0, .GPL_3_0));
-    try testing.expect(!compatibility.isCompatible(.MPL_2_0, .OFL_1_1));
-}
-
-test "OFL-1.1 is specialized and restrictive" {
-    try testing.expect(compatibility.isCompatible(.OFL_1_1, .OFL_1_1));
-    try testing.expect(!compatibility.isCompatible(.OFL_1_1, .MIT));
-    try testing.expect(!compatibility.isCompatible(.OFL_1_1, .GPL_3_0));
-}
-
-test "findCompatibleLicenses with single MIT license" {
-    const allocator = testing.allocator;
-    const existing = [_]compatibility.License{.MIT};
-
-    const compatible = try compatibility.findCompatibleLicenses(allocator, &existing);
-    defer allocator.free(compatible);
-
-    // MIT should allow many licenses
-    try testing.expect(compatible.len > 0);
-
-    // Should include common permissive licenses
-    var found_mit = false;
-    var found_apache = false;
+    const allowed = [_]License{ .@"GPL-2.0-or-later", .@"Apache-2.0" };
+    const allowed_candidates = compatibility.findCandidates(&allowed, &out);
     var found_gpl3 = false;
-
-    for (compatible) |lic| {
-        if (lic == .MIT) found_mit = true;
-        if (lic == .Apache_2_0) found_apache = true;
-        if (lic == .GPL_3_0) found_gpl3 = true;
+    for (allowed_candidates) |candidate| {
+        if (candidate.license == .@"GPL-3.0-only") {
+            found_gpl3 = true;
+            try testing.expectEqual(.compatible, candidate.status);
+        }
     }
-
-    try testing.expect(found_mit);
-    try testing.expect(found_apache);
     try testing.expect(found_gpl3);
-}
-
-test "findCompatibleLicenses with GPL-3.0" {
-    const allocator = testing.allocator;
-    const existing = [_]compatibility.License{.GPL_3_0};
-
-    const compatible = try compatibility.findCompatibleLicenses(allocator, &existing);
-    defer allocator.free(compatible);
-
-    // GPL-3.0 is restrictive, should only allow GPL-3.0 and AGPL-3.0
-    try testing.expect(compatible.len == 2);
-
-    var found_gpl3 = false;
-    var found_agpl3 = false;
-
-    for (compatible) |lic| {
-        if (lic == .GPL_3_0) found_gpl3 = true;
-        if (lic == .AGPL_3_0) found_agpl3 = true;
+    const allowed_reversed = [_]License{ .@"Apache-2.0", .@"GPL-2.0-or-later" };
+    var reverse_out: [@import("licenses.zig").all.len]compatibility.Candidate = undefined;
+    const reverse_candidates = compatibility.findCandidates(&allowed_reversed, &reverse_out);
+    try testing.expectEqual(allowed_candidates.len, reverse_candidates.len);
+    for (allowed_candidates, reverse_candidates) |candidate, reversed_candidate| {
+        try testing.expectEqual(candidate.license, reversed_candidate.license);
+        try testing.expectEqual(candidate.status, reversed_candidate.status);
     }
-
-    try testing.expect(found_gpl3);
-    try testing.expect(found_agpl3);
 }
 
-test "findCompatibleLicenses with MIT and Apache-2.0" {
-    const allocator = testing.allocator;
-    const existing = [_]compatibility.License{ .MIT, .Apache_2_0 };
-
-    const compatible = try compatibility.findCompatibleLicenses(allocator, &existing);
-    defer allocator.free(compatible);
-
-    // Both are permissive, should allow many licenses
-    try testing.expect(compatible.len > 0);
+test "assessment of multiple sources is order invariant and honors the strictest status" {
+    const inputs = [_]License{ .@"GPL-3.0-only", .@"MPL-2.0" };
+    const reversed = [_]License{ .@"MPL-2.0", .@"GPL-3.0-only" };
+    const forward = compatibility.assessAll(&inputs, .@"GPL-3.0-only");
+    const backward = compatibility.assessAll(&reversed, .@"GPL-3.0-only");
+    try testing.expectEqual(forward.status, backward.status);
+    try testing.expectEqual(.conditional, forward.status);
 }
 
-test "findCompatibleLicenses with conflicting licenses" {
-    const allocator = testing.allocator;
-    const existing = [_]compatibility.License{ .GPL_3_0, .OFL_1_1 };
+test "pair assessment is independent of argument order" {
+    const forward = compatibility.assessPair(.@"GPL-3.0-only", .@"AGPL-3.0-only");
+    const backward = compatibility.assessPair(.@"AGPL-3.0-only", .@"GPL-3.0-only");
+    try testing.expectEqual(forward.status, backward.status);
+    try testing.expectEqual(.conditional, forward.status);
+    try testing.expectEqual(.incompatible, compatibility.assessPair(.@"GPL-2.0-only", .@"Apache-2.0").status);
+}
 
-    const compatible = try compatibility.findCompatibleLicenses(allocator, &existing);
-    defer allocator.free(compatible);
+test "LGPL version 3 cannot be combined under GPL version 2 only" {
+    try expectStatus(.@"LGPL-3.0-or-later", .@"GPL-2.0-only", .incompatible);
+    try testing.expectEqual(.incompatible, compatibility.assessPair(.@"LGPL-3.0-or-later", .@"GPL-2.0-only").status);
+}
 
-    // These are incompatible, should find no compatible licenses
-    try testing.expect(compatible.len == 0);
+test "Apache patent terms work with GNU version 3 targets" {
+    for ([_]License{ .@"GPL-3.0-only", .@"GPL-3.0-or-later", .@"AGPL-3.0-only", .@"AGPL-3.0-or-later", .@"LGPL-3.0-only", .@"LGPL-3.0-or-later" }) |target| {
+        try expectStatus(.@"Apache-2.0", target, .compatible);
+    }
+}
+
+test "font bundling does not make OFL a software license" {
+    try expectStatus(.MIT, .@"OFL-1.1", .incompatible);
+}
+
+test "later LGPL version 3 permission permits the corresponding GPL variant" {
+    try expectStatus(.@"LGPL-3.0-or-later", .@"GPL-3.0-or-later", .compatible);
+}
+
+test "parser accepts case variants but not unknown or compound expressions" {
+    try testing.expectEqual(License.MIT, License.fromString("mit").?);
+    try testing.expectEqual(License.@"BSL-1.0", License.fromString("bsl-1.0").?);
+    try testing.expectEqual(License.@"GPL-3.0-only", License.fromString("gpl-3.0-ONLY").?);
+    for ([_][]const u8{ "", "BUSL-1.1", "GPL-4.0-only", "MIT OR Apache-2.0", "MIT AND Zlib" }) |id| {
+        try testing.expect(License.fromString(id) == null);
+    }
+}
+
+test "Boost and Zlib can join GPL work without removing source notices" {
+    try expectStatus(.@"BSL-1.0", .@"GPL-2.0-only", .compatible);
+    try expectStatus(.Zlib, .@"GPL-3.0-only", .compatible);
+    try expectStatus(.@"BSL-1.0", .Unlicense, .conditional);
+    try expectStatus(.Zlib, .@"0BSD", .conditional);
+}
+
+test "every pair has the same assessment in either order" {
+    for (@import("licenses.zig").all) |a| {
+        for (@import("licenses.zig").all) |b| {
+            const forward = compatibility.assessPair(a, b);
+            const reversed = compatibility.assessPair(b, a);
+            try testing.expectEqual(forward.status, reversed.status);
+            try testing.expectEqualStrings(forward.reason, reversed.reason);
+        }
+    }
 }

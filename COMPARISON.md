@@ -1,99 +1,27 @@
-# Comparison: Web vs CLI
+# Web and CLI comparison
 
-## Overview
+Repolicense CLI originated as a terminal port of the [repolicense web application](https://github.com/lucasfth/repolicense). The CLI now has an intentionally revised obligation-driven decision tree; it is not a promise of identical questions or paths in both applications.
 
-This CLI tool (`repolicense-cli`) is a command-line implementation of the web-based [repolicense](https://github.com/lucasfth/repolicense) tool.
+## Interface and architecture
 
-## Features Comparison
+| Area | Original web application | Current CLI |
+| --- | --- | --- |
+| Interaction | Browser yes/no controls | Terminal answers, `back`, `reset`, and `quit` |
+| State | Browser session storage | In-memory session history |
+| License details | GitHub API integration | Local explanations and SPDX license-text links; no network calls |
+| Implementation | JavaScript, HTML/CSS, Shoelace | Zig 0.17.0 and the standard library |
+| Tree representation | JavaScript objects | Static typed nodes with canonical license metadata |
+| Compatibility | Not part of the original port's web interface | `--compat` / `-c`, all-input target assessment and conditional prerequisites |
+| Distribution | Browser application | Native executable; Linux, macOS, and Windows CI |
 
-| Feature | Web Version | CLI Version |
-|---------|-------------|-------------|
-| Decision Tree Navigation | ✅ Yes/No buttons | ✅ Text input (yes/no) |
-| Back Navigation | ✅ Back button | ✅ `back` command |
-| Reset | ✅ Reset button | ✅ `reset` command |
-| License Information | ✅ Fetches from GitHub API | ✅ Provides API links |
-| Session Persistence | ✅ SessionStorage | ❌ Not needed (CLI session) |
-| Elaboration Display | ✅ Collapsible details | ✅ Always shown |
-| Mermaid Diagram Export | ✅ Copy to clipboard | ❌ Not implemented |
-| Download Tree | ✅ JSON download | ❌ Not implemented |
-| Visual Design | ✅ Modern UI with Shoelace | ✅ Clean text output |
-| License Compatibility Checker | ❌ Not implemented | ✅ New feature for checking compatible licenses when forking/combining projects |
-| Platform | 🌐 Browser-based | 💻 Native CLI |
+## Intentional decision-tree changes
 
-## Architecture Differences
+The [current tree](./TREE_STRUCTURE.md) separates fonts from software immediately, checks software licensing rights, and distinguishes concrete patent/notice obligations before recommending a permissive license. Copyleft paths distinguish combined programs, library boundaries, files, and modified network services instead of ranking licenses by vague strength or business friendliness.
 
-### Web Version
-- **Language**: JavaScript
-- **UI Framework**: HTML/CSS with Shoelace components
-- **Storage**: Browser SessionStorage
-- **API Calls**: Direct fetch to GitHub API
-- **Tree Structure**: JavaScript object literals
+GNU recommendations explicitly choose `-only` or `-or-later`; older GPL, LGPL, and EPL versions require an existing-project reason. Boost and Zlib add meaningful binary-notice/origin distinctions. Every real recommendation carries obligations and an SPDX link, while preferences outside the supported model produce guidance without a fake license link.
 
-### CLI Version
-- **Language**: Zig
-- **UI**: Terminal text interface
-- **Storage**: In-memory (per session)
-- **API Calls**: Provides links (no direct calls)
-- **Tree Structure**: Zig const structs with compile-time guarantees
+Both CLI modes use `src/licenses.zig`. Compatibility results preserve original component obligations and distinguish conditional library/file/font/module combinations from unconditional permission to relicense. The supported catalog and limitations are documented in the [README](./README.md).
 
-## Decision Tree Logic
+## Choosing an interface
 
-Both versions implement the **exact same decision tree logic**:
-- Same questions
-- Same elaborations
-- Same license recommendations
-- Same paths to each license
-
-The core decision-making algorithm has been faithfully ported from JavaScript to Zig.
-
-## Advantages of Each Version
-
-### Web Version Advantages
-- No installation required
-- Visual, clickable interface
-- Works on any device with a browser
-- Export features (Mermaid, JSON)
-- Visual feedback and animations
-
-### CLI Version Advantages
-- Works offline (no internet required)
-- Fast and lightweight
-- No browser overhead
-- Can be scripted/automated
-- Native performance
-- Privacy (no web analytics)
-- Integrates with terminal workflows
-
-## Use Cases
-
-### Use Web Version When:
-- You prefer visual interfaces
-- You want to export diagrams
-- You're on a device without Zig
-- You want to share results easily
-
-### Use CLI Version When:
-- You prefer terminal interfaces
-- You're working in a remote/SSH session
-- You want offline access
-- You need a lightweight tool
-- You're building scripts around license selection
-
-## Implementation Notes
-
-The CLI version was designed to be:
-1. **Faithful**: Same decision tree and logic
-2. **Standalone**: No external dependencies beyond Zig stdlib
-3. **Simple**: Easy to build and use
-4. **Maintainable**: Clean, readable Zig code
-5. **Portable**: Works on Linux, macOS, and Windows
-
-## Future Enhancements
-
-Potential additions to CLI version:
-- [ ] Fetch and display full license text from GitHub API
-- [ ] Save/load session state to file
-- [ ] Export decision path
-- [ ] Color output support
-- [ ] Batch mode for scripting
-- [ ] Configuration file support
+Use the web application for clickable navigation and its browser-oriented presentation. Use the CLI for offline guidance, terminal/SSH workflows, and its explicit combined-work compatibility model. The CLI remains interactive text output, not a stable machine-readable API; scripts should not treat presentation wording as a contract.

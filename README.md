@@ -36,9 +36,9 @@
 
 A terminal companion to [repolicense](https://github.com/lucasfth/repolicense), built with Zig and its standard library. Answer a series of questions to explore licenses for your project, or enter existing licenses to check the compatibility rules for combining code.
 
-- **License selection** — a yes/no decision tree with explanations and links to license details.
+- **License selection** — separate font/software paths, concrete obligations, and explained recommendations.
 - **Navigation** — go back to an earlier question or reset the session.
-- **Compatibility checks** — compare comma-separated licenses and see the reasons behind each pairing.
+- **Compatibility checks** — supported and conditional combined-work targets, with explicit GNU versions.
 - **Local operation** — no account, service, or runtime dependency; the CLI provides links rather than making API calls.
 
 > This tool offers general guidance, not legal advice. Review the actual license terms and your project's obligations before choosing a license or combining code.
@@ -86,7 +86,9 @@ Ensure `$HOME/.local/bin` is on your shell's `PATH`. Repeat the build command af
 
 ### Choose a license
 
-Start without arguments and answer the questions about your project. You can revisit answers at any point, including after reaching a recommendation.
+Start without arguments. Fonts are routed first; software questions then cover licensing rights, patent grants, notices, and the scope of copyleft. Older GNU/EPL versions are offered for existing-project requirements, not as arbitrary fallbacks. Every recommendation includes its obligations and a link to the SPDX license text.
+
+You can revisit answers at any point, including after reaching a recommendation. A preference outside the supported choices produces guidance rather than a misleading license recommendation.
 
 | Input | Action |
 | --- | --- |
@@ -108,25 +110,40 @@ Or run the built executable with `--compat` (short form: `-c`):
 ./zig-out/bin/repolicense --compat
 ```
 
-At the prompt, enter SPDX-style identifiers separated by commas:
+At the prompt, enter canonical SPDX identifiers separated by commas:
 
 ```text
-MIT, Apache-2.0
+BSL-1.0, Zlib, Apache-2.0
+GPL-2.0-or-later, Apache-2.0
 ```
 
-The checker lists the licenses its rules permit for the combined work and explains pairwise compatibility. License identifiers are case-insensitive. Enter another list to check a different combination, or `quit` / `q` to leave.
+Identifiers are case-insensitive; duplicate entries are ignored. GNU licenses require an explicit `-only` or `-or-later` suffix. Bare identifiers such as `GPL-3.0` are rejected instead of guessing which rights were granted. Enter another list to check a different combination, or `quit` / `q` to leave.
+
+The checker evaluates a **covered combined work**, not whether independently licensed projects can share a repository:
+
+| Result | Meaning |
+| --- | --- |
+| `compatible` | A supported target is available, subject to ordinary license compliance and retained component obligations. |
+| `conditional` | A target requires the stated conditions, such as separate LGPL libraries, eligible MPL secondary licensing, an EPL secondary-license notice, or separately licensed font assets. |
+| `incompatible` | No supported common target satisfies the inputs under this model; independent aggregation or separately granted permissions may still be possible. |
+
+For example, `GPL-2.0-only, Apache-2.0` has no combined-program target here, while `GPL-2.0-or-later, Apache-2.0` can use GPL version 3. A GPL/AGPL version-3 combination is conditional under section 13: the modules retain their respective licenses, not blanket AGPL relicensing.
+
+Pairwise results report the existence of a common target and do not depend on input order. They do **not** mean that either component can simply be relicensed as the other. All inputs constrain the candidate list, and original notices, source obligations, and font/library terms remain in force.
 
 ## Supported licenses
 
 | Category | Identifiers |
 | --- | --- |
-| Permissive | `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Apache-2.0`, `0BSD`, `ISC` |
-| Strong copyleft | `GPL-2.0`, `GPL-3.0`, `AGPL-3.0` |
-| Weak copyleft | `LGPL-3.0`, `MPL-2.0`, `EPL-1.0`, `EPL-2.0` |
+| Permissive | `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Apache-2.0`, `0BSD`, `ISC`, `BSL-1.0`, `Zlib` |
+| Strong copyleft | `GPL-2.0-only`, `GPL-2.0-or-later`, `GPL-3.0-only`, `GPL-3.0-or-later`, `AGPL-3.0-only`, `AGPL-3.0-or-later` |
+| Weak copyleft | `LGPL-2.1-only`, `LGPL-2.1-or-later`, `LGPL-3.0-only`, `LGPL-3.0-or-later`, `MPL-2.0`, `EPL-1.0`, `EPL-2.0` |
 | Public-domain dedication | `Unlicense` |
 | Fonts | `OFL-1.1` |
 
-These are the identifiers understood by the CLI; the checker does not model every license exception or variant.
+The shared catalog contains 23 identifiers used by both modes. `BSL-1.0` is the **Boost Software License**, not the Business Source License. `0BSD` retains copyright without a notice-copy condition; `Unlicense` is a public-domain dedication with a fallback permission.
+
+The checker does not parse `OR` / `AND` expressions, exceptions, unlisted versions, or jurisdiction-specific issues. License names alone cannot establish how source is combined or whether a secondary-license grant exists; inspect every conditional prerequisite. Documentation and other non-font assets are outside the decision tree.
 
 ## Development
 
@@ -135,7 +152,7 @@ zig build test
 zig fmt --check src/
 ```
 
-The existing tests cover decision-tree paths, license parsing and compatibility rules, and terminal-screen rendering. [CI](https://github.com/lucasfth/repolicense-cli/actions/workflows/ci.yml) builds and tests on Linux, macOS, and Windows using Zig 0.17.0, with a separate formatting check.
+The tests cover every recommendation/advisory path, graph navigation invariants, canonical license parsing, version/obligation boundaries, order-independent compatibility, and terminal-screen rendering. Exercise the actual CLI as described in the [test plan](./TEST_PLAN.md), not just the unit suite. [CI](https://github.com/lucasfth/repolicense-cli/actions/workflows/ci.yml) builds and tests on Linux, macOS, and Windows using Zig 0.17.0, with a separate formatting check.
 
 For the decision-tree layout and project background, see [Tree structure](./TREE_STRUCTURE.md) and [Web/CLI comparison](./COMPARISON.md).
 
@@ -147,4 +164,4 @@ Read the [contribution guide](./CONTRIBUTING.md) for setup and license additions
 
 Licensed under [Apache License 2.0](./LICENSE).
 
-The decision tree is based on the original [repolicense web application](https://github.com/lucasfth/repolicense).
+The CLI originated from the [repolicense web application](https://github.com/lucasfth/repolicense); its current obligation-driven tree intentionally extends and revises that original logic.

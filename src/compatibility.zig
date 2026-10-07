@@ -1,244 +1,218 @@
-const std = @import("std");
+const catalog = @import("licenses.zig");
+const License = catalog.License;
 
-/// License compatibility checker for determining which licenses can be used
-/// when forking/combining projects with existing licenses.
-///
-/// Compatibility rules are based on common open-source license compatibility:
-/// - Permissive licenses (MIT, BSD, Apache) are generally compatible with everything
-/// - Copyleft licenses (GPL, AGPL) require derivatives to use the same or compatible license
-/// - Some licenses (Apache-2.0 + GPL-2.0) have known incompatibilities
-pub const License = enum {
-    MIT,
-    BSD_2_Clause,
-    BSD_3_Clause,
-    Apache_2_0,
-    @"0BSD",
-    ISC,
-    AGPL_3_0,
-    GPL_3_0,
-    GPL_2_0,
-    LGPL_3_0,
-    MPL_2_0,
-    EPL_2_0,
-    EPL_1_0,
-    Unlicense,
-    OFL_1_1,
+pub const Status = enum { compatible, conditional, incompatible };
 
-    pub fn fromString(s: []const u8) ?License {
-        // Convert to uppercase for case-insensitive matching
-        var buf: [32]u8 = undefined;
-        if (s.len > buf.len) return null;
-
-        const upper = std.ascii.upperString(&buf, s);
-
-        const table = [_]struct { name: []const u8, value: License }{
-            .{ .name = "MIT", .value = .MIT },
-            .{ .name = "BSD-2-CLAUSE", .value = .BSD_2_Clause },
-            .{ .name = "BSD-3-CLAUSE", .value = .BSD_3_Clause },
-            .{ .name = "APACHE-2.0", .value = .Apache_2_0 },
-            .{ .name = "0BSD", .value = .@"0BSD" },
-            .{ .name = "ISC", .value = .ISC },
-            .{ .name = "AGPL-3.0", .value = .AGPL_3_0 },
-            .{ .name = "GPL-3.0", .value = .GPL_3_0 },
-            .{ .name = "GPL-2.0", .value = .GPL_2_0 },
-            .{ .name = "LGPL-3.0", .value = .LGPL_3_0 },
-            .{ .name = "MPL-2.0", .value = .MPL_2_0 },
-            .{ .name = "EPL-2.0", .value = .EPL_2_0 },
-            .{ .name = "EPL-1.0", .value = .EPL_1_0 },
-            .{ .name = "UNLICENSE", .value = .Unlicense },
-            .{ .name = "OFL-1.1", .value = .OFL_1_1 },
-        };
-
-        for (table) |entry| {
-            if (std.mem.eql(u8, upper, entry.name)) return entry.value;
-        }
-
-        return null;
-    }
-
-    pub fn toString(self: License) []const u8 {
-        return switch (self) {
-            .MIT => "MIT",
-            .BSD_2_Clause => "BSD-2-Clause",
-            .BSD_3_Clause => "BSD-3-Clause",
-            .Apache_2_0 => "Apache-2.0",
-            .@"0BSD" => "0BSD",
-            .ISC => "ISC",
-            .AGPL_3_0 => "AGPL-3.0",
-            .GPL_3_0 => "GPL-3.0",
-            .GPL_2_0 => "GPL-2.0",
-            .LGPL_3_0 => "LGPL-3.0",
-            .MPL_2_0 => "MPL-2.0",
-            .EPL_2_0 => "EPL-2.0",
-            .EPL_1_0 => "EPL-1.0",
-            .Unlicense => "Unlicense",
-            .OFL_1_1 => "OFL-1.1",
-        };
-    }
-
-    pub fn getCategory(self: License) LicenseCategory {
-        return switch (self) {
-            .MIT, .BSD_2_Clause, .BSD_3_Clause, .Apache_2_0, .@"0BSD", .ISC => .Permissive,
-            .AGPL_3_0, .GPL_3_0, .GPL_2_0 => .StrongCopyleft,
-            .LGPL_3_0, .MPL_2_0, .EPL_2_0, .EPL_1_0 => .WeakCopyleft,
-            .Unlicense => .PublicDomain,
-            .OFL_1_1 => .Specialized,
-        };
-    }
+pub const Assessment = struct {
+    status: Status,
+    reason: []const u8,
 };
 
-pub const LicenseCategory = enum {
-    Permissive,
-    StrongCopyleft,
-    WeakCopyleft,
-    PublicDomain,
-    Specialized,
+pub const Candidate = struct {
+    license: License,
+    status: Status,
 };
 
-/// Checks if a new license can be used when combining with existing licenses
-/// Returns true if the combination is compatible
-pub fn isCompatible(existing: License, new_license: License) bool {
-    // Public domain and permissive licenses can be combined with anything
-    if (existing.getCategory() == .PublicDomain or existing == .Unlicense) {
-        return true;
+const compatible = Assessment{ .status = .compatible, .reason = "The source license permits distribution of the combined work under this license, while its notices and source obligations remain in force." };
+const incompatible = Assessment{ .status = .incompatible, .reason = "The source license does not permit relicensing its covered work under the target license." };
+const retained_notices = Assessment{ .status = .conditional, .reason = "Apply the no-notice license or dedication only to your own contributions. Existing components retain their original licenses, notices, and other conditions; you cannot waive their authors' rights." };
+const mpl_files = Assessment{ .status = .conditional, .reason = "Keep MPL-covered source and modifications in separately licensed files under MPL, preserve notices, and provide their source. The target license applies only to other files, not copied MPL source." };
+const epl_components = Assessment{ .status = .conditional, .reason = "Keep the EPL program and its covered modifications under EPL, with source, notices, and commercial-distributor obligations. Apply the target license only to separately licensed code outside that covered program; do not copy EPL source into differently licensed files." };
+const apache_components = Assessment{ .status = .conditional, .reason = "Retain the Apache component separately under Apache-2.0, including its notices and patent terms. The target applies only to independently licensed surrounding code; it does not replace Apache's terms on copied source." };
+const gpl2_conversion = Assessment{ .status = .compatible, .reason = "LGPL-2.1 section 3 permits conveying the covered library under GPL version 2 or any later version; preserve the applicable GPL notices and source obligations." };
+const gpl3_conversion = Assessment{ .status = .compatible, .reason = "LGPL-3.0 permits conveying the covered library under GPL-3.0; preserve the applicable GPL notices and source obligations." };
+const lgpl_link = Assessment{ .status = .conditional, .reason = "Use the target license only for the surrounding application; keep the library under LGPL, provide its corresponding source, and preserve users' ability to relink a modified library." };
+const gpl_agpl_modules = Assessment{ .status = .conditional, .reason = "GPL-3.0 section 13 permits a qualifying separate AGPL module combination; retain each module's license and required notices rather than relicensing either module." };
+const mpl_secondary = Assessment{ .status = .conditional, .reason = "MPL-2.0 section 3.3 requires eligible files without the Incompatible With Secondary Licenses restriction and a larger work containing code already under the target GNU license. Additionally offer covered source under MPL and that secondary license, preserving notices and source availability." };
+const epl_secondary = Assessment{ .status = .conditional, .reason = "EPL-2.0 section 3.2 requires the initial contributor's explicit Exhibit A notice authorizing this GPL version and combination with separate GPL-licensed files. Include the EPL agreement and preserve notices; the license's template Exhibit A alone is not permission." };
+const epl_agpl_modules = Assessment{ .status = .conditional, .reason = "First satisfy EPL-2.0 section 3.2 with an initial-contributor Exhibit A grant authorizing GPL-3.0 and separate GPL-licensed material. Then satisfy GPL/AGPL section 13 for separate modules, retaining their respective licenses; this is not a direct EPL-to-AGPL grant." };
+const ofl_bundle = Assessment{ .status = .conditional, .reason = "Keep the font under OFL-1.1, including its Reserved Font Name and redistribution conditions; apply the software license only to software and satisfy OFL font-bundling terms." };
+
+/// Assess whether source-covered work can be included when the combined work
+/// is distributed under `target`. This never grants rights over other code.
+pub fn assess(existing: License, target: License) Assessment {
+    if (existing == target) return compatible;
+    if (target == .@"OFL-1.1") return incompatible;
+    if (existing == .@"OFL-1.1") return ofl_bundle;
+
+    if ((target == .@"0BSD" or target == .Unlicense) and
+        existing.getCategory() == .Permissive and existing != .@"0BSD")
+    {
+        return retained_notices;
     }
 
-    // Same license is always compatible
-    if (existing == new_license) {
-        return true;
-    }
-
-    // Check compatibility based on existing license
     return switch (existing) {
-        // Permissive licenses accept most things, but derivatives must respect their terms
-        .MIT, .BSD_2_Clause, .BSD_3_Clause, .ISC, .@"0BSD" => switch (new_license.getCategory()) {
-            .Permissive, .PublicDomain, .WeakCopyleft, .StrongCopyleft => true,
-            .Specialized => false, // Font licenses are specialized
+        .MIT, .@"BSD-2-Clause", .@"BSD-3-Clause", .@"0BSD", .ISC, .@"BSL-1.0", .Zlib, .Unlicense => compatible,
+        .@"Apache-2.0" => switch (target) {
+            .@"GPL-2.0-only", .@"GPL-2.0-or-later", .@"LGPL-2.1-only", .@"LGPL-2.1-or-later" => incompatible,
+            .@"MPL-2.0", .@"EPL-1.0", .@"EPL-2.0" => apache_components,
+            else => compatible,
         },
-
-        // Apache-2.0 has patent grant issues with GPL-2.0
-        .Apache_2_0 => switch (new_license) {
-            .GPL_2_0 => false, // Known incompatibility
-            else => switch (new_license.getCategory()) {
-                .Permissive, .PublicDomain => true,
-                .WeakCopyleft => true,
-                .StrongCopyleft => new_license == .GPL_3_0 or new_license == .AGPL_3_0,
-                .Specialized => false,
-            },
+        .@"GPL-2.0-only" => incompatible,
+        .@"GPL-2.0-or-later" => switch (target) {
+            .@"GPL-2.0-only", .@"GPL-3.0-only", .@"GPL-3.0-or-later" => compatible,
+            .@"AGPL-3.0-only", .@"AGPL-3.0-or-later" => gpl_agpl_modules,
+            else => incompatible,
         },
-
-        // Strong copyleft licenses require derivative works to be under compatible copyleft
-        .GPL_3_0 => switch (new_license) {
-            .GPL_3_0, .AGPL_3_0 => true,
-            else => false,
+        .@"GPL-3.0-only" => switch (target) {
+            .@"AGPL-3.0-only", .@"AGPL-3.0-or-later" => gpl_agpl_modules,
+            else => incompatible,
         },
-
-        .GPL_2_0 => switch (new_license) {
-            .GPL_2_0, .GPL_3_0 => true,
-            else => false,
+        .@"GPL-3.0-or-later" => switch (target) {
+            .@"GPL-3.0-only" => compatible,
+            .@"AGPL-3.0-only", .@"AGPL-3.0-or-later" => gpl_agpl_modules,
+            else => incompatible,
         },
-
-        .AGPL_3_0 => switch (new_license) {
-            .AGPL_3_0 => true,
-            else => false,
+        .@"AGPL-3.0-only" => incompatible,
+        .@"AGPL-3.0-or-later" => switch (target) {
+            .@"AGPL-3.0-only" => compatible,
+            else => incompatible,
         },
-
-        // LGPL allows linking with other software
-        .LGPL_3_0 => switch (new_license.getCategory()) {
-            .Permissive, .PublicDomain, .WeakCopyleft => true,
-            .StrongCopyleft => new_license == .GPL_3_0 or new_license == .AGPL_3_0,
-            .Specialized => false,
+        .@"LGPL-2.1-only" => switch (target) {
+            .@"GPL-2.0-only", .@"GPL-2.0-or-later", .@"GPL-3.0-only", .@"GPL-3.0-or-later" => gpl2_conversion,
+            .MIT,
+            .@"BSD-2-Clause",
+            .@"BSD-3-Clause",
+            .@"Apache-2.0",
+            .@"0BSD",
+            .ISC,
+            .@"BSL-1.0",
+            .Zlib,
+            .Unlicense,
+            .@"MPL-2.0",
+            .@"EPL-1.0",
+            .@"EPL-2.0",
+            .@"AGPL-3.0-only",
+            .@"AGPL-3.0-or-later",
+            => lgpl_link,
+            else => incompatible,
         },
-
-        // Weak copyleft licenses are file-level copyleft
-        .MPL_2_0 => switch (new_license.getCategory()) {
-            .Permissive, .PublicDomain, .WeakCopyleft => true,
-            .StrongCopyleft => new_license == .GPL_3_0 or new_license == .AGPL_3_0,
-            .Specialized => false,
+        .@"LGPL-2.1-or-later" => switch (target) {
+            .@"GPL-2.0-only", .@"GPL-2.0-or-later", .@"GPL-3.0-only", .@"GPL-3.0-or-later" => gpl2_conversion,
+            .@"LGPL-2.1-only", .@"LGPL-3.0-only", .@"LGPL-3.0-or-later" => compatible,
+            .MIT,
+            .@"BSD-2-Clause",
+            .@"BSD-3-Clause",
+            .@"Apache-2.0",
+            .@"0BSD",
+            .ISC,
+            .@"BSL-1.0",
+            .Zlib,
+            .Unlicense,
+            .@"MPL-2.0",
+            .@"EPL-1.0",
+            .@"EPL-2.0",
+            .@"AGPL-3.0-only",
+            .@"AGPL-3.0-or-later",
+            => lgpl_link,
+            else => incompatible,
         },
-
-        .EPL_2_0, .EPL_1_0 => switch (new_license.getCategory()) {
-            .Permissive, .PublicDomain, .WeakCopyleft => true,
-            .StrongCopyleft => false,
-            .Specialized => false,
+        .@"LGPL-3.0-only" => switch (target) {
+            .@"GPL-3.0-only" => gpl3_conversion,
+            .MIT,
+            .@"BSD-2-Clause",
+            .@"BSD-3-Clause",
+            .@"Apache-2.0",
+            .@"0BSD",
+            .ISC,
+            .@"BSL-1.0",
+            .Zlib,
+            .Unlicense,
+            .@"MPL-2.0",
+            .@"EPL-1.0",
+            .@"EPL-2.0",
+            .@"AGPL-3.0-only",
+            .@"AGPL-3.0-or-later",
+            => lgpl_link,
+            else => incompatible,
         },
-
-        .Unlicense => true, // Public domain
-
-        .OFL_1_1 => switch (new_license) {
-            .OFL_1_1 => true,
-            else => false,
+        .@"LGPL-3.0-or-later" => switch (target) {
+            .@"GPL-3.0-only", .@"GPL-3.0-or-later" => gpl3_conversion,
+            .@"LGPL-3.0-only" => compatible,
+            .MIT,
+            .@"BSD-2-Clause",
+            .@"BSD-3-Clause",
+            .@"Apache-2.0",
+            .@"0BSD",
+            .ISC,
+            .@"BSL-1.0",
+            .Zlib,
+            .Unlicense,
+            .@"MPL-2.0",
+            .@"EPL-1.0",
+            .@"EPL-2.0",
+            .@"AGPL-3.0-only",
+            .@"AGPL-3.0-or-later",
+            => lgpl_link,
+            else => incompatible,
         },
+        .@"MPL-2.0" => switch (target) {
+            .@"GPL-2.0-only",
+            .@"GPL-2.0-or-later",
+            .@"GPL-3.0-only",
+            .@"GPL-3.0-or-later",
+            .@"AGPL-3.0-only",
+            .@"AGPL-3.0-or-later",
+            .@"LGPL-2.1-only",
+            .@"LGPL-2.1-or-later",
+            .@"LGPL-3.0-only",
+            .@"LGPL-3.0-or-later",
+            => mpl_secondary,
+            else => mpl_files,
+        },
+        .@"EPL-2.0" => switch (target) {
+            .@"GPL-2.0-only", .@"GPL-2.0-or-later", .@"GPL-3.0-only", .@"GPL-3.0-or-later" => epl_secondary,
+            .@"AGPL-3.0-only", .@"AGPL-3.0-or-later" => epl_agpl_modules,
+            .@"EPL-1.0" => incompatible,
+            else => epl_components,
+        },
+        .@"EPL-1.0" => switch (target) {
+            .@"EPL-2.0" => compatible,
+            .@"GPL-2.0-only", .@"GPL-2.0-or-later", .@"GPL-3.0-only", .@"GPL-3.0-or-later", .@"AGPL-3.0-only", .@"AGPL-3.0-or-later" => incompatible,
+            else => epl_components,
+        },
+        .@"OFL-1.1" => unreachable,
     };
 }
 
-/// Find all compatible licenses given a list of existing licenses
-/// Allocates and returns a list of compatible licenses
-pub fn findCompatibleLicenses(allocator: std.mem.Allocator, existing_licenses: []const License) ![]const License {
-    var compatible = try std.ArrayList(License).initCapacity(allocator, 0);
-    defer compatible.deinit(allocator);
-
-    // All possible licenses to check
-    const all_licenses = [_]License{
-        .MIT,
-        .BSD_2_Clause,
-        .BSD_3_Clause,
-        .Apache_2_0,
-        .@"0BSD",
-        .ISC,
-        .AGPL_3_0,
-        .GPL_3_0,
-        .GPL_2_0,
-        .LGPL_3_0,
-        .MPL_2_0,
-        .EPL_2_0,
-        .EPL_1_0,
-        .Unlicense,
-        .OFL_1_1,
-    };
-
-    // Check each possible license against all existing licenses
-    for (all_licenses) |candidate| {
-        var is_compatible_with_all = true;
-        for (existing_licenses) |existing| {
-            if (!isCompatible(existing, candidate)) {
-                is_compatible_with_all = false;
-                break;
-            }
-        }
-
-        if (is_compatible_with_all) {
-            try compatible.append(allocator, candidate);
-        }
+/// All source obligations apply. The strictest individual result controls.
+pub fn assessAll(existing: []const License, target: License) Assessment {
+    var result = compatible;
+    for (existing) |license| {
+        const current = assess(license, target);
+        if (current.status == .incompatible) return current;
+        if (current.status == .conditional) result = current;
     }
-
-    return compatible.toOwnedSlice(allocator);
+    return result;
 }
 
-/// Get a brief explanation of why licenses are compatible or not
-pub fn getCompatibilityReason(existing: License, new_license: License) []const u8 {
-    if (existing == new_license) {
-        return "Same license - fully compatible";
-    }
-
-    const compatible = isCompatible(existing, new_license);
-
-    if (compatible) {
-        return switch (existing.getCategory()) {
-            .PublicDomain => "Public domain allows any license",
-            .Permissive => "Permissive licenses are broadly compatible",
-            .WeakCopyleft => "Weak copyleft allows compatible combinations",
-            .StrongCopyleft => "Strong copyleft requires compatible copyleft license",
-            .Specialized => "Specialized licenses have specific rules",
-        };
-    } else {
-        if (existing == .Apache_2_0 and new_license == .GPL_2_0) {
-            return "Apache-2.0 and GPL-2.0 have patent grant incompatibility";
+/// Write every candidate accepted for all source licenses into caller storage.
+/// An empty source list intentionally produces no candidates.
+pub fn findCandidates(existing: []const License, out: *[catalog.all.len]Candidate) []const Candidate {
+    if (existing.len == 0) return out[0..0];
+    var count: usize = 0;
+    for (catalog.all) |license| {
+        const assessment = assessAll(existing, license);
+        if (assessment.status != .incompatible) {
+            out[count] = .{ .license = license, .status = assessment.status };
+            count += 1;
         }
-        return switch (existing.getCategory()) {
-            .StrongCopyleft => "Strong copyleft requires derivative under same/compatible license",
-            .Specialized => "Specialized licenses restrict combination with other types",
-            else => "License terms are incompatible",
-        };
     }
+    return out[0..count];
+}
+
+/// Pair status reports whether a common combined-work license exists, rather
+/// than treating directional relicensing in either direction as pair status.
+pub fn assessPair(a: License, b: License) Assessment {
+    const inputs: [2]License = if (@backingInt(a) <= @backingInt(b)) .{ a, b } else .{ b, a };
+    var best: ?Assessment = null;
+    for (catalog.all) |target| {
+        const combined = assessAll(&inputs, target);
+        if (combined.status == .compatible) return combined;
+        if (combined.status == .conditional and best == null) best = combined;
+    }
+    return best orelse Assessment{
+        .status = .incompatible,
+        .reason = "No supported combined-work license satisfies both source licenses; this does not prevent repository aggregation as separate works under their original terms.",
+    };
 }

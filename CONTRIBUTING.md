@@ -41,7 +41,7 @@ zig fmt --check src/
 
 To format changed Zig files, use `zig fmt path/to/file.zig`.
 
-Also exercise the affected CLI mode. For changes to navigation, try `yes`, `no`, `back`, `reset`, and `quit`. For compatibility changes, check both a compatible combination such as `MIT, Apache-2.0` and a conflicting combination such as `GPL-3.0, OFL-1.1`.
+Also exercise the affected CLI mode. For navigation, try `yes`, `no`, `back`, `reset`, and `quit`, including at a recommendation. For compatibility, check `GPL-2.0-only, Apache-2.0` (no combined-work target), `GPL-2.0-or-later, Apache-2.0` (GPL version 3 available), and `MIT, OFL-1.1` (conditional separate font assets). Reverse the input order and check that candidate statuses remain unchanged. See the [test plan](./TEST_PLAN.md) for additional boundaries.
 
 CI builds and tests pull requests on Linux, macOS, and Windows. Formatting is checked separately on Linux.
 
@@ -53,7 +53,8 @@ CI installs the compiler through `.github/actions/setup-zig/action.yml`, verifie
 | --- | --- |
 | `src/main.zig` | Process setup, input handling, and the two CLI modes |
 | `src/tree.zig` | License-selection decision tree |
-| `src/compatibility.zig` | License identifiers, categories, and compatibility rules |
+| `src/licenses.zig` | Shared canonical SPDX identifiers, categories, obligations, and license-text URLs |
+| `src/compatibility.zig` | Directed combined-work assessments, conditional prerequisites, and common-target checks |
 | `src/ui.zig` | ANSI terminal-screen rendering |
 | `src/*_test.zig` | Decision-tree, compatibility, and rendering tests |
 | `build.zig` | Build, run, and test steps |
@@ -62,11 +63,11 @@ Keep changes focused, follow existing Zig conventions, and let `zig fmt` handle 
 
 ## Adding or correcting licenses
 
-1. For license selection, update the `Node` definitions and branches in `buildDecisionTree()` in `src/tree.zig`.
-2. For compatibility, update `License`, its parsing/display/category mappings, and the compatibility rules in `src/compatibility.zig` as needed.
-3. Add behavioral coverage in `src/tree_test.zig` or `src/compatibility_test.zig`. Check reachable recommendations and permitted/rejected combinations, not just enum membership.
-4. Update the supported-license list in the [README](./README.md) and any affected explanations in [TREE_STRUCTURE.md](./TREE_STRUCTURE.md).
-5. Include authoritative license references and explain the rule in your pull request. Compatibility can depend on license versions, exceptions, and how code is combined; avoid unsupported blanket claims.
+1. Add a canonical SPDX tag and its category/obligations in `src/licenses.zig`. Parsing, display, SPDX links, and the CLI's supported list derive from this shared catalog; do not duplicate them.
+2. Add a concrete obligation-driven path in `src/tree.zig`. Actual recommendations use typed `Node.license` metadata; advisory results leave it null. Explain distribution/network triggers, version permission, and any legacy-project requirement rather than ranking licenses as "simplest" or "business-friendly."
+3. Update directed `assess()` rules in `src/compatibility.zig`. Distinguish ordinary compliance, specific conditional prerequisites, and actual combined-work conflicts. The target must satisfy **all** input licenses; original components keep their obligations. A symmetric pair result is a common-target search, not a directional relicensing verdict.
+4. Add behavioral regressions in `src/tree_test.zig` / `src/compatibility_test.zig`: preference-to-license paths, permission/version boundaries, conditional combinations, and input-order independence. Avoid wording assertions, copied-metadata tests, or enum-membership checks without consumer behavior.
+5. Update the [README](./README.md), [tree guide](./TREE_STRUCTURE.md), and [test plan](./TEST_PLAN.md) when affected. Include authoritative license sections in the pull request; exceptions, secondary-license notices, file/library boundaries, and GNU `-only` / `-or-later` permissions cannot be inferred from a short license name alone.
 
 ## Submitting a pull request
 

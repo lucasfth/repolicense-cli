@@ -1,109 +1,93 @@
 const std = @import("std");
 const testing = std.testing;
 const tree = @import("tree.zig");
+const catalog = @import("licenses.zig");
 
-test "decision tree root exists and is a question" {
-    try testing.expect(tree.decision_tree.node_type == .Question);
-    try testing.expect(tree.decision_tree.content.len > 0);
-}
+const Expected = union(enum) { license: []const u8, advice: void };
+const PathCase = struct { path: []const bool, expected: Expected };
 
-test "decision tree root has both yes and no branches" {
-    try testing.expect(tree.decision_tree.yes != null);
-    try testing.expect(tree.decision_tree.no != null);
-}
+const path_cases = [_]PathCase{
+    .{ .path = &.{ true, true }, .expected = .{ .license = "OFL-1.1" } },
+    .{ .path = &.{ true, false }, .expected = .{ .advice = {} } },
+    .{ .path = &.{ false, false }, .expected = .{ .advice = {} } },
+    .{ .path = &.{ false, true, false }, .expected = .{ .advice = {} } },
+    .{ .path = &.{ false, true, true, false, true }, .expected = .{ .license = "Apache-2.0" } },
+    .{ .path = &.{ false, true, true, false, false, true }, .expected = .{ .license = "Unlicense" } },
+    .{ .path = &.{ false, true, true, false, false, false, true }, .expected = .{ .license = "0BSD" } },
+    .{ .path = &.{ false, true, true, false, false, false, false, true, false }, .expected = .{ .license = "BSL-1.0" } },
+    .{ .path = &.{ false, true, true, false, false, false, false, true, true }, .expected = .{ .license = "Zlib" } },
+    .{ .path = &.{ false, true, true, false, false, false, false, false, true }, .expected = .{ .license = "BSD-3-Clause" } },
+    .{ .path = &.{ false, true, true, false, false, false, false, false, false, true }, .expected = .{ .license = "BSD-2-Clause" } },
+    .{ .path = &.{ false, true, true, false, false, false, false, false, false, false, true }, .expected = .{ .license = "ISC" } },
+    .{ .path = &.{ false, true, true, false, false, false, false, false, false, false, false }, .expected = .{ .license = "MIT" } },
+    .{ .path = &.{ false, true, true, true, true, true }, .expected = .{ .license = "AGPL-3.0-or-later" } },
+    .{ .path = &.{ false, true, true, true, true, false }, .expected = .{ .license = "AGPL-3.0-only" } },
+    .{ .path = &.{ false, true, true, true, false, true, true, true }, .expected = .{ .license = "GPL-2.0-or-later" } },
+    .{ .path = &.{ false, true, true, true, false, true, true, false }, .expected = .{ .license = "GPL-2.0-only" } },
+    .{ .path = &.{ false, true, true, true, false, true, false, true }, .expected = .{ .license = "GPL-3.0-or-later" } },
+    .{ .path = &.{ false, true, true, true, false, true, false, false }, .expected = .{ .license = "GPL-3.0-only" } },
+    .{ .path = &.{ false, true, true, true, false, false, true, true, true }, .expected = .{ .license = "LGPL-2.1-or-later" } },
+    .{ .path = &.{ false, true, true, true, false, false, true, true, false }, .expected = .{ .license = "LGPL-2.1-only" } },
+    .{ .path = &.{ false, true, true, true, false, false, true, false, true }, .expected = .{ .license = "LGPL-3.0-or-later" } },
+    .{ .path = &.{ false, true, true, true, false, false, true, false, false }, .expected = .{ .license = "LGPL-3.0-only" } },
+    .{ .path = &.{ false, true, true, true, false, false, false, true }, .expected = .{ .license = "MPL-2.0" } },
+    .{ .path = &.{ false, true, true, true, false, false, false, false, true, true }, .expected = .{ .license = "EPL-1.0" } },
+    .{ .path = &.{ false, true, true, true, false, false, false, false, true, false }, .expected = .{ .license = "EPL-2.0" } },
+    .{ .path = &.{ false, true, true, true, false, false, false, false, false }, .expected = .{ .advice = {} } },
+};
 
-test "all answer nodes have null yes/no pointers" {
-    // Test some known answer nodes by traversing the tree
-    const closed_source = tree.decision_tree.no.?;
-    try testing.expect(closed_source.node_type == .Answer);
-    try testing.expect(closed_source.yes == null);
-    try testing.expect(closed_source.no == null);
-}
-
-test "MIT license is reachable from root" {
-    // Path: yes > yes > yes > yes
-    const permissive = tree.decision_tree.yes.?;
-    try testing.expect(permissive.node_type == .Question);
-
-    const minimal = permissive.yes.?;
-    try testing.expect(minimal.node_type == .Question);
-
-    const simplest = minimal.yes.?;
-    try testing.expect(simplest.node_type == .Question);
-
-    const mit = simplest.yes.?;
-    try testing.expect(mit.node_type == .Answer);
-    try testing.expect(std.mem.eql(u8, mit.content, "MIT"));
-}
-
-test "Apache-2.0 license is reachable from root" {
-    // Path: yes > yes > no > yes
-    const permissive = tree.decision_tree.yes.?;
-    const minimal = permissive.yes.?;
-    const explicit_patents = minimal.no.?;
-    try testing.expect(explicit_patents.node_type == .Question);
-
-    const apache = explicit_patents.yes.?;
-    try testing.expect(apache.node_type == .Answer);
-    try testing.expect(std.mem.eql(u8, apache.content, "Apache-2.0"));
-}
-
-test "GPL-3.0 license is reachable from root" {
-    // Path: yes > no > yes > yes > no > yes
-    const permissive = tree.decision_tree.yes.?;
-    const copyleft = permissive.no.?;
-    try testing.expect(copyleft.node_type == .Question);
-
-    const strong = copyleft.yes.?;
-    try testing.expect(strong.node_type == .Question);
-
-    const network = strong.yes.?;
-    try testing.expect(network.node_type == .Question);
-
-    const latest_gpl = network.no.?;
-    try testing.expect(latest_gpl.node_type == .Question);
-
-    const gpl3 = latest_gpl.yes.?;
-    try testing.expect(gpl3.node_type == .Answer);
-    try testing.expect(std.mem.eql(u8, gpl3.content, "GPL-3.0"));
-}
-
-test "tree has proper structure with no null dereferencing" {
-    // Walk through several paths to ensure no crashes
-    var paths_tested: usize = 0;
-
-    // Test permissive branch
-    if (tree.decision_tree.yes) |permissive| {
-        paths_tested += 1;
-        try testing.expect(permissive.node_type == .Question);
-
-        if (permissive.yes) |minimal| {
-            paths_tested += 1;
-            try testing.expect(minimal.node_type == .Question);
+test "preference paths reach every recommendation and advisory" {
+    for (path_cases) |case| {
+        var node: *const tree.Node = &tree.decision_tree;
+        for (case.path) |answer| {
+            try testing.expectEqual(tree.NodeType.Question, node.node_type);
+            node = if (answer) node.yes orelse return error.MissingQuestionBranch else node.no orelse return error.MissingQuestionBranch;
         }
-
-        if (permissive.no) |copyleft| {
-            paths_tested += 1;
-            try testing.expect(copyleft.node_type == .Question);
+        try testing.expectEqual(tree.NodeType.Answer, node.node_type);
+        switch (case.expected) {
+            .license => |identifier| {
+                const license = catalog.License.fromString(identifier) orelse return error.UnknownExpectedLicense;
+                try testing.expectEqual(license, node.license.?);
+            },
+            .advice => try testing.expect(node.license == null),
         }
     }
-
-    // Test closed source branch
-    if (tree.decision_tree.no) |closed| {
-        paths_tested += 1;
-        try testing.expect(closed.node_type == .Answer);
-    }
-
-    try testing.expect(paths_tested == 4);
 }
 
-test "all question nodes have content and elaboration" {
-    // Test root node
-    try testing.expect(tree.decision_tree.content.len > 0);
-    try testing.expect(tree.decision_tree.elaboration.len > 0);
+fn countTrue(values: []const bool) usize {
+    var count: usize = 0;
+    for (values) |value| if (value) {
+        count += 1;
+    };
+    return count;
+}
 
-    // Test a few more nodes
-    const permissive = tree.decision_tree.yes.?;
-    try testing.expect(permissive.content.len > 0);
-    try testing.expect(permissive.elaboration.len > 0);
+test "decision graph has complete branches, valid leaves, reachability, and no cycles" {
+    var stack: [128]*const tree.Node = undefined;
+    var recommendations: [catalog.all.len]bool = @splat(false);
+    try inspect(&tree.decision_tree, &stack, 0, &recommendations);
+    try testing.expectEqual(catalog.all.len, countTrue(&recommendations));
+}
+
+fn inspect(node: *const tree.Node, stack: *[128]*const tree.Node, depth: usize, recommendations: *[catalog.all.len]bool) !void {
+    try testing.expect(depth < stack.len);
+    for (stack[0..depth]) |ancestor| try testing.expect(ancestor != node);
+    stack[depth] = node;
+
+    switch (node.node_type) {
+        .Question => {
+            try testing.expect(node.license == null);
+            try inspect(node.yes orelse return error.MissingQuestionBranch, stack, depth + 1, recommendations);
+            try inspect(node.no orelse return error.MissingQuestionBranch, stack, depth + 1, recommendations);
+        },
+        .Answer => {
+            try testing.expect(node.yes == null);
+            try testing.expect(node.no == null);
+            if (node.license) |license| {
+                inline for (catalog.all, 0..) |known, index| {
+                    if (known == license) recommendations[index] = true;
+                }
+            }
+        },
+    }
 }
