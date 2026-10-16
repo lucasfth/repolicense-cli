@@ -2,47 +2,45 @@ const std = @import("std");
 const testing = std.testing;
 const ui = @import("ui.zig");
 
-// A tiny writer that collects printed bytes into an ArrayList(u8).
-const CaptureWriter = struct {
-    allocator: std.mem.Allocator,
-    buf: *std.ArrayList(u8),
+const labels = [_][]const u8{ "Yes", "No", "Back", "Restart", "Quit" };
 
-    pub fn init(allocator: std.mem.Allocator, buf: *std.ArrayList(u8)) CaptureWriter {
-        return CaptureWriter{ .allocator = allocator, .buf = buf };
-    }
+test "choice parser accepts one-based numbers and exact labels" {
+    try testing.expectEqual(@as(?usize, 0), try ui.parseChoice("1", &labels));
+    try testing.expectEqual(@as(?usize, 2), try ui.parseChoice("3", &labels));
+    try testing.expectEqual(@as(?usize, 4), try ui.parseChoice("5", &labels));
+    try testing.expectEqual(@as(?usize, 1), try ui.parseChoice("No", &labels));
+}
 
-    pub fn print(self: *CaptureWriter, comptime fmt: []const u8, args: anytype) !void {
-        const s = try self.allocator.print(fmt, args);
-        defer self.allocator.free(s);
-        for (s) |c| {
-            try self.buf.append(self.allocator, c);
-        }
-    }
-};
+test "choice parser accepts yes, no, and navigation shortcuts" {
+    try testing.expectEqual(@as(?usize, 0), try ui.parseChoice("y", &labels));
+    try testing.expectEqual(@as(?usize, 1), try ui.parseChoice("N", &labels));
+    try testing.expectEqual(@as(?usize, 2), try ui.parseChoice("b", &labels));
+    try testing.expectEqual(@as(?usize, 3), try ui.parseChoice("reset", &labels));
+    try testing.expectEqual(@as(?usize, 4), try ui.parseChoice("exit", &labels));
+    try testing.expectError(error.InvalidSelection, ui.parseChoice("y", labels[2..]));
+}
 
-test "Screen.render overwrites previous content" {
-    const allocator = testing.allocator;
+test "choice parser rejects blank, invalid, and out-of-range selections" {
+    try testing.expectError(error.InvalidSelection, ui.parseChoice("", &labels));
+    try testing.expectError(error.InvalidSelection, ui.parseChoice("0", &labels));
+    try testing.expectError(error.InvalidSelection, ui.parseChoice("6", &labels));
+    try testing.expectError(error.InvalidSelection, ui.parseChoice("maybe", &labels));
+}
 
-    var buf = try std.ArrayList(u8).initCapacity(allocator, 0);
-    defer buf.deinit(allocator);
+test "multiple parser maps labels and numbers while removing duplicates" {
+    const choices = [_][]const u8{ "MIT", "Apache-2.0", "MPL-2.0" };
+    var output: [3]usize = undefined;
+    const result = try ui.parseMany("MPL-2.0, 2, MPL-2.0", &choices, &output);
+    try testing.expectEqualSlices(usize, &.{ 2, 1 }, result.?);
+}
 
-    var writer = CaptureWriter.init(allocator, &buf);
+test "multiple parser accepts cancellation and rejects invalid bounds" {
+    var output: [4]usize = undefined;
+    try testing.expectEqual(@as(?[]const usize, null), try ui.parseMany("q", &labels, &output));
+    try testing.expectError(error.InvalidSelection, ui.parseMany("1,6", &labels, &output));
+}
 
-    var screen = ui.Screen.init();
-
-    // First render: should simply print the content (no clear sequences)
-    try screen.render(&writer, "first line\nsecond line\n");
-    const out1 = try buf.toOwnedSlice(allocator);
-    defer allocator.free(out1);
-
-    try testing.expect(std.mem.indexOf(u8, out1, "first line\n") != null);
-
-    // Second render: should include clear sequences before printing new content
-    try screen.render(&writer, "only line\n");
-    const out2 = try buf.toOwnedSlice(allocator);
-    defer allocator.free(out2);
-
-    const esc = "\x1b[1A\x1b[2K";
-    try testing.expect(std.mem.indexOf(u8, out2, esc) != null);
-    try testing.expect(std.mem.indexOf(u8, out2, "only line\n") != null);
+test "multiple parser rejects selections that exceed output capacity" {
+    var output: [1]usize = undefined;
+    try testing.expectError(error.SelectionBufferTooSmall, ui.parseMany("1,2", &labels, &output));
 }

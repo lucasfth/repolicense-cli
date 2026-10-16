@@ -15,7 +15,7 @@ git switch -c fix/describe-your-change
 zig build
 ```
 
-The project uses only the Zig standard library. There are no additional packages to install.
+The build uses only the Zig standard library. [Gum](https://github.com/charmbracelet/gum) is an optional runtime executable for terminal menus, never a required package or automatic download. Use `--plain` to exercise the standalone interface.
 
 ## Run the CLI
 
@@ -41,7 +41,7 @@ zig fmt --check src/
 
 To format changed Zig files, use `zig fmt path/to/file.zig`.
 
-Also exercise the affected CLI mode. For navigation, try `yes`, `no`, `back`, `reset`, and `quit`, including at a recommendation. For compatibility, check `GPL-2.0-only, Apache-2.0` (no combined-work target), `GPL-2.0-or-later, Apache-2.0` (GPL version 3 available), and `MIT, OFL-1.1` (conditional separate font assets). Reverse the input order and check that candidate statuses remain unchanged. See the [test plan](./TEST_PLAN.md) for additional boundaries.
+Also exercise the affected CLI mode. For navigation, try numeric and label choices, `back`, `reset`, and `quit`, including at a recommendation and an advisory. Check a real Gum terminal session, cancellation, and a terminal without Gum; redirected output must contain no ANSI controls. For compatibility, check `GPL-2.0-only, Apache-2.0` (no combined-work target), `GPL-2.0-or-later, Apache-2.0` (GPL version 3 available), and `MIT, OFL-1.1` (conditional separate font assets). Reverse inputs and check statuses remain unchanged. See the [test plan](./TEST_PLAN.md).
 
 CI builds and tests pull requests on Linux, macOS, and Windows. Formatting is checked separately on Linux.
 
@@ -52,11 +52,11 @@ CI installs the compiler through `.github/actions/setup-zig/action.yml`, verifie
 | File | Responsibility |
 | --- | --- |
 | `src/main.zig` | Process setup, input handling, and the two CLI modes |
-| `src/tree.zig` | License-selection decision tree |
+| `src/tree.zig` | Static intent-based menu graph and typed recommendation/advisory outcomes |
 | `src/licenses.zig` | Shared canonical SPDX identifiers, categories, obligations, and license-text URLs |
 | `src/compatibility.zig` | Directed combined-work assessments, conditional prerequisites, and common-target checks |
-| `src/ui.zig` | ANSI terminal-screen rendering |
-| `src/*_test.zig` | Decision-tree, compatibility, and rendering tests |
+| `src/ui.zig` | Optional Gum subprocess menus, plain prompts, and selection parsing |
+| `src/*_test.zig` | Licensing graph, compatibility, and input-boundary tests |
 | `build.zig` | Build, run, and test steps |
 
 Keep changes focused, follow existing Zig conventions, and let `zig fmt` handle indentation. Comments should explain non-obvious decisions rather than repeat the code.
@@ -64,7 +64,7 @@ Keep changes focused, follow existing Zig conventions, and let `zig fmt` handle 
 ## Adding or correcting licenses
 
 1. Add a canonical SPDX tag and its category/obligations in `src/licenses.zig`. Parsing, display, SPDX links, and the CLI's supported list derive from this shared catalog; do not duplicate them.
-2. Add a concrete obligation-driven path in `src/tree.zig`. Actual recommendations use typed `Node.license` metadata; advisory results leave it null. Explain distribution/network triggers, version permission, and any legacy-project requirement rather than ranking licenses as "simplest" or "business-friendly."
+2. Add an intent- and obligation-driven path in `src/tree.zig`. `node(Id)` returns static choices with explicit destinations. Recommendations use typed `Node.license`; advisory outcomes use `Node.advisory`. Keep the common path short, preserve existing-license constraints, explain GNU grant permissions, and avoid ranking licenses as "simplest" or "business-friendly."
 3. Update directed `assess()` rules in `src/compatibility.zig`. Distinguish ordinary compliance, specific conditional prerequisites, and actual combined-work conflicts. The target must satisfy **all** input licenses; original components keep their obligations. A symmetric pair result is a common-target search, not a directional relicensing verdict.
 4. Add behavioral regressions in `src/tree_test.zig` / `src/compatibility_test.zig`: preference-to-license paths, permission/version boundaries, conditional combinations, and input-order independence. Avoid wording assertions, copied-metadata tests, or enum-membership checks without consumer behavior.
 5. Update the [README](./README.md), [tree guide](./TREE_STRUCTURE.md), and [test plan](./TEST_PLAN.md) when affected. Include authoritative license sections in the pull request; exceptions, secondary-license notices, file/library boundaries, and GNU `-only` / `-or-later` permissions cannot be inferred from a short license name alone.

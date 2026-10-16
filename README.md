@@ -36,10 +36,10 @@
 
 A terminal companion to [repolicense](https://github.com/lucasfth/repolicense), built with Zig and its standard library. Answer a series of questions to explore licenses for your project, or enter existing licenses to check the compatibility rules for combining code.
 
-- **License selection** — separate font/software paths, concrete obligations, and explained recommendations.
-- **Navigation** — go back to an earlier question or reset the session.
+- **License selection** — intent-based software/font menus, ownership checks, and explained recommendations.
+- **Navigation** — go back to an earlier question or restart the session.
 - **Compatibility checks** — supported and conditional combined-work targets, with explicit GNU versions.
-- **Local operation** — no account, service, or runtime dependency; the CLI provides links rather than making API calls.
+- **Local operation** — no account, service, or required runtime dependency. Optional [Gum](https://github.com/charmbracelet/gum) adds terminal menus; the CLI never downloads it or makes API calls.
 
 > This tool offers general guidance, not legal advice. Review the actual license terms and your project's obligations before choosing a license or combining code.
 
@@ -86,19 +86,35 @@ Ensure `$HOME/.local/bin` is on your shell's `PATH`. Repeat the build command af
 
 ### Choose a license
 
-Start without arguments. Fonts are routed first; software questions then cover licensing rights, patent grants, notices, and the scope of copyleft. Older GNU/EPL versions are offered for existing-project requirements, not as arbitrary fallbacks. Every recommendation includes its obligations and a link to the SPDX license text.
+Start without arguments to open a menu: **Choose a license**, **Check compatibility**, or **Quit**. Select Choose a license, then software, font, or another asset, confirm licensing authority, and establish whether existing project terms constrain the choice. Existing/forked/community projects receive guidance to preserve their grants rather than a fresh license recommendation. Other assets get an explicit out-of-scope result.
 
-You can revisit answers at any point, including after reaching a recommendation. A preference outside the supported choices produces guidance rather than a misleading license recommendation.
+For new software, select broad open-source permissions and then permissive or copyleft goals. The common MIT/Apache path takes six selections. Specialist permissive licenses remain under advanced choices. Copyleft offers file, library, whole-program, and Eclipse-specific choices; only whole-program sharing asks about the additional AGPL network source offer. GNU version grants are explicit. Fonts require accepting OFL's same-license, notice, naming, and standalone-sale conditions.
 
-| Input | Action |
+Every recommendation explains why it fits, its obligations and limitations, and links to the SPDX text. Back/restart remain available at recommendations and advisory outcomes.
+
+### Optional terminal menus
+
+Install Gum separately if desired, for example `brew install gum` on macOS or `winget install charmbracelet.gum` on Windows. See [Gum installation](https://github.com/charmbracelet/gum#installation) for other platforms. It is not a build requirement.
+
+When `gum` is on `PATH`, all three standard streams are terminals, and `TERM` is not `dumb`, the CLI uses a styled header, rounded question/guidance/result panels, and highlighted arrow-key menus. Enter confirms a choice. Compatibility mode uses a styled introduction/results heading and searchable multi-select picker: type to search, Tab toggles and advances, Enter checks the selection, and Ctrl-C cancels. Gum renders its own menus; Repolicense replaces the viewport between questionnaire steps rather than guessing frame line counts. Styling and terminal behavior were exercised with Gum 2.0.2.
+
+Use `repolicense --plain` or `repolicense --compat --plain` to force plain mode. Missing Gum falls back automatically; redirected streams always use plain output without ANSI escapes. Gum's own exit status 1 can mean either cancellation or a runtime error: its diagnostics remain visible and no recommendation is inferred from that exit.
+
+Interactive questionnaire navigation replaces the previous view, including in numbered mode without Gum. Back and Restart clear the old question rather than adding another copy below it. Redirected streams and `TERM=dumb` retain a readable transcript instead. In Gum menus, Back is an explicit action; Esc/Ctrl-C cancels the session rather than selecting Back.
+
+| Plain input | Action |
 | --- | --- |
-| `yes` or `y` | Answer yes |
-| `no` or `n` | Answer no |
+| Number or displayed label | Select an option |
+| `y` / `n` | Select a literal Yes / No option, where offered |
 | `back` or `b` | Return to the previous question |
-| `reset` or `r` | Start again |
+| `reset`, `restart`, or `r` | Start again |
 | `quit`, `q`, or `exit` | End the session |
 
+`--help` / `-h` shows usage. Unknown arguments exit with status 2.
+
 ### Check compatibility
+
+Choose **Check compatibility** from the start menu, or use `--compat` / `-c` to skip it. Gum results open a compact overview: selected identifiers, whether supported common targets exist, and ordinary/conditional target counts. Ordinary targets still require standard license compliance; conditional targets have additional prerequisites. **View targets and conditions** opens the full scrollable assessment, including pairwise checks; `q` returns to the overview. **Check another combination** reopens selection; **Quit** exits. Plain mode prints the full assessment directly.
 
 ```sh
 zig build run -- --compat
@@ -152,7 +168,7 @@ zig build test
 zig fmt --check src/
 ```
 
-The tests cover every recommendation/advisory path, graph navigation invariants, canonical license parsing, version/obligation boundaries, order-independent compatibility, and terminal-screen rendering. Exercise the actual CLI as described in the [test plan](./TEST_PLAN.md), not just the unit suite. [CI](https://github.com/lucasfth/repolicense-cli/actions/workflows/ci.yml) builds and tests on Linux, macOS, and Windows using Zig 0.17.0, with a separate formatting check.
+The tests cover recommendation reachability, scope and authority boundaries, explicit version grants, canonical license parsing, order-independent compatibility, and menu input boundaries. Exercise the actual CLI with and without Gum as described in the [test plan](./TEST_PLAN.md), not just the unit suite. [CI](https://github.com/lucasfth/repolicense-cli/actions/workflows/ci.yml) builds and tests on Linux, macOS, and Windows using Zig 0.17.0, with a separate formatting check.
 
 For the decision-tree layout and project background, see [Tree structure](./TREE_STRUCTURE.md) and [Web/CLI comparison](./COMPARISON.md).
 
