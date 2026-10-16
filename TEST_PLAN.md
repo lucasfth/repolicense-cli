@@ -10,26 +10,35 @@ zig fmt --check src/
 
 ## Automated behavior coverage
 
-- `src/tree_test.zig`: concrete preference paths for all 23 canonical recommendations and four advisory outcomes; complete question branches, terminal leaves, recommendation reachability, and cycle detection.
+- `src/tree_test.zig`: all 23 recommendation outcomes reachable, graph cycles and terminal-leaf invariants, distinct authority/scope/existing/font outcomes, common-path length, copyleft boundaries, and explicit GNU grants.
 - `src/compatibility_test.zig`: canonical/case-insensitive parsing, rejection of ambiguous GNU IDs and compound expressions, GNU version and conversion boundaries, patent conflicts, conditional file/library/font treatment, all-input candidate intersection, and input-order invariance.
-- `src/ui_test.zig`: terminal block replacement/clearing behavior.
+- `src/ui_test.zig`: numbered/label selection, navigation aliases, conditional yes/no aliases, multi-selection deduplication, and invalid input/buffer boundaries.
 
 Keep tests about consumer-visible outcomes and invariants. Do not assert question wording, copied descriptions, enum existence, or incidental formatting. Add a failing regression before fixing a boundary; a successful compile is not proof of interactive behavior.
 
-## Decision-tree smoke
+## Questionnaire smoke
 
-Run `./zig-out/bin/repolicense` (use `.exe` on Windows). Follow the [tree diagram](./TREE_STRUCTURE.md), checking:
+Run `./zig-out/bin/repolicense --plain` (use `.exe` on Windows). Follow the [graph](./TREE_STRUCTURE.md), checking:
 
-- The first font path reaches OFL without traversing software preferences.
-- Software ownership/reserved-rights answers produce **guidance**, not a fake license or license-text link.
-- The patent-grant branch reaches Apache before the other permissive choices.
-- Source-only notice preservation routes to Boost or Zlib according to altered-source/origin requirements; retaining binary-copy notices routes to MIT/BSD/ISC.
-- Project/library/file copyleft reaches GPL/LGPL/MPL respectively; AGPL explicitly covers modified network versions.
-- GPL-2.0, LGPL-2.1, and EPL-1.0 require an existing-project reason; GNU leaves explicitly select `-only` or `-or-later`.
-- Every real recommendation shows its canonical ID, meaningful obligations, and an SPDX license-text URL.
-- Unmatched copyleft preferences produce guidance rather than an unrelated fallback.
+- Other assets exit to out-of-scope guidance; uncertain software/font authority exits to ownership guidance.
+- Existing/forked/community projects preserve existing terms rather than receiving a replacement license.
+- New software reaches MIT or Apache after six selections. Advanced permissives remain available with their distinct conditions.
+- File/library/whole-program copyleft reaches MPL/LGPL/GPL. The whole-program network source-offer preference reaches AGPL; a server alone does not imply AGPL.
+- Legacy GNU/EPL choices require a specific authorized reason; GNU grants explicitly select `-only` or `-or-later`.
+- Font conditions are explicitly accepted or rejected; help explains them before accepting/refusing.
+- Recommendations display canonical ID, rationale, obligations/limitations, and SPDX URL. Advisory outcomes have no license link.
+- Numbers and labels work; invalid/blank input retries; back/restart/quit work before and after results. Back at the root stays there. EOF exits cleanly at root, in a questionnaire, and at a result.
+- `--help` shows usage; an unknown argument exits 2. Redirected output contains no ANSI escapes.
 
-Verify navigation before and after a result: `back`, `reset`, uppercase/short answers, invalid input, and `quit`. Back at the root should stay at the root. Advisory leaves must support the same navigation as recommendations.
+For a reproducible common-path smoke, pipe seven `1` lines followed by `quit` to `repolicense --plain`: one chooses the questionnaire from the start menu, then six reach MIT. Expect `License: MIT` and exit 0. Also select Check compatibility from the start menu and submit a canonical SPDX list, ensuring buffered input survives the mode transition. `--compat` / `-c` must bypass the launcher. Do not use old yes/no scripts: menus are multi-choice.
+
+## Gum terminal smoke
+
+Install Gum separately and run the real CLI in a terminal with `TERM` not `dumb` (Gum 2.0.2 has been exercised). Verify the colored header, rounded question and result panels, highlighted cursor, arrow-key/Enter selection, and complete MIT path. Exercise Software → Ownership → Back → Restart: the visible screen must contain only the current question. Exercise Font → ownership → new font → reject: the visible screen must show the OFL-mismatch advisory, not a previous question. Check a narrow terminal with `COLUMNS` set and the longest result. Esc/Ctrl-C cancels without a recommendation inferred from cancellation. Gum renders the menus; the parent replaces views without counting Gum frame lines.
+
+Run `--compat` at 80×24, select MIT plus Apache-2.0, and submit. The compact overview must show selected IDs, common-target outcome, ordinary/conditional counts, and all three actions without scrolling. View targets and conditions must open a scrollable full assessment; `q` returns to the overview. Check another combination explicitly reopens selection; Quit exits. Also check GPL-2.0-only + Apache-2.0 (no supported target) and MIT + OFL-1.1 (conditional-only), without implying blanket relicensing. Tab toggles and advances in the picker; Ctrl-C cancels. Gum version 2 exits 1 for both Esc and some runtime errors, so retain diagnostics and never infer a negative answer.
+
+Repeat with Gum absent from `PATH` and with `--plain` even while Gum is present: numbered questionnaire prompts must replace the terminal viewport on forward, Back, and Restart transitions. Only the current question should remain visible, including when long text wraps. Redirected streams and `TERM=dumb` must instead retain plain transcripts without controls. The missing-Gum compatibility fallback accepts canonical SPDX lists or numbered options on its first picker; subsequent inputs use canonical lists.
 
 ## Compatibility smoke
 
@@ -68,4 +77,4 @@ repolicense
 repolicense --compat
 ```
 
-Ensure `$HOME/.local/bin` is on `PATH` or that your configured shell alias resolves to the current build. CI compiles and runs tests on Linux, macOS, and Windows; also inspect interactive clearing in a real terminal when changing `src/ui.zig`.
+Ensure `$HOME/.local/bin` is on `PATH` or that your configured shell alias resolves to the current build. CI compiles and runs tests on Linux, macOS, and Windows. Native terminal behavior still needs the real Gum/plain smoke checks above; cross-compilation alone does not prove it.

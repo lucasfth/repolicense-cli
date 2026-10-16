@@ -3,91 +3,91 @@ const testing = std.testing;
 const tree = @import("tree.zig");
 const catalog = @import("licenses.zig");
 
-const Expected = union(enum) { license: []const u8, advice: void };
-const PathCase = struct { path: []const bool, expected: Expected };
-
-const path_cases = [_]PathCase{
-    .{ .path = &.{ true, true }, .expected = .{ .license = "OFL-1.1" } },
-    .{ .path = &.{ true, false }, .expected = .{ .advice = {} } },
-    .{ .path = &.{ false, false }, .expected = .{ .advice = {} } },
-    .{ .path = &.{ false, true, false }, .expected = .{ .advice = {} } },
-    .{ .path = &.{ false, true, true, false, true }, .expected = .{ .license = "Apache-2.0" } },
-    .{ .path = &.{ false, true, true, false, false, true }, .expected = .{ .license = "Unlicense" } },
-    .{ .path = &.{ false, true, true, false, false, false, true }, .expected = .{ .license = "0BSD" } },
-    .{ .path = &.{ false, true, true, false, false, false, false, true, false }, .expected = .{ .license = "BSL-1.0" } },
-    .{ .path = &.{ false, true, true, false, false, false, false, true, true }, .expected = .{ .license = "Zlib" } },
-    .{ .path = &.{ false, true, true, false, false, false, false, false, true }, .expected = .{ .license = "BSD-3-Clause" } },
-    .{ .path = &.{ false, true, true, false, false, false, false, false, false, true }, .expected = .{ .license = "BSD-2-Clause" } },
-    .{ .path = &.{ false, true, true, false, false, false, false, false, false, false, true }, .expected = .{ .license = "ISC" } },
-    .{ .path = &.{ false, true, true, false, false, false, false, false, false, false, false }, .expected = .{ .license = "MIT" } },
-    .{ .path = &.{ false, true, true, true, true, true }, .expected = .{ .license = "AGPL-3.0-or-later" } },
-    .{ .path = &.{ false, true, true, true, true, false }, .expected = .{ .license = "AGPL-3.0-only" } },
-    .{ .path = &.{ false, true, true, true, false, true, true, true }, .expected = .{ .license = "GPL-2.0-or-later" } },
-    .{ .path = &.{ false, true, true, true, false, true, true, false }, .expected = .{ .license = "GPL-2.0-only" } },
-    .{ .path = &.{ false, true, true, true, false, true, false, true }, .expected = .{ .license = "GPL-3.0-or-later" } },
-    .{ .path = &.{ false, true, true, true, false, true, false, false }, .expected = .{ .license = "GPL-3.0-only" } },
-    .{ .path = &.{ false, true, true, true, false, false, true, true, true }, .expected = .{ .license = "LGPL-2.1-or-later" } },
-    .{ .path = &.{ false, true, true, true, false, false, true, true, false }, .expected = .{ .license = "LGPL-2.1-only" } },
-    .{ .path = &.{ false, true, true, true, false, false, true, false, true }, .expected = .{ .license = "LGPL-3.0-or-later" } },
-    .{ .path = &.{ false, true, true, true, false, false, true, false, false }, .expected = .{ .license = "LGPL-3.0-only" } },
-    .{ .path = &.{ false, true, true, true, false, false, false, true }, .expected = .{ .license = "MPL-2.0" } },
-    .{ .path = &.{ false, true, true, true, false, false, false, false, true, true }, .expected = .{ .license = "EPL-1.0" } },
-    .{ .path = &.{ false, true, true, true, false, false, false, false, true, false }, .expected = .{ .license = "EPL-2.0" } },
-    .{ .path = &.{ false, true, true, true, false, false, false, false, false }, .expected = .{ .advice = {} } },
-};
-
-test "preference paths reach every recommendation and advisory" {
-    for (path_cases) |case| {
-        var node: *const tree.Node = &tree.decision_tree;
-        for (case.path) |answer| {
-            try testing.expectEqual(tree.NodeType.Question, node.node_type);
-            node = if (answer) node.yes orelse return error.MissingQuestionBranch else node.no orelse return error.MissingQuestionBranch;
-        }
-        try testing.expectEqual(tree.NodeType.Answer, node.node_type);
-        switch (case.expected) {
-            .license => |identifier| {
-                const license = catalog.License.fromString(identifier) orelse return error.UnknownExpectedLicense;
-                try testing.expectEqual(license, node.license.?);
-            },
-            .advice => try testing.expect(node.license == null),
-        }
-    }
+test "all catalog licenses have reachable recommendation outcomes" {
+    var reached: [catalog.all.len]bool = @splat(false);
+    var seen: [std.meta.tags(tree.Id).len]bool = @splat(false);
+    var stack: [std.meta.tags(tree.Id).len]bool = @splat(false);
+    try visit(.work_type, &seen, &stack, &reached);
+    for (reached) |value| try testing.expect(value);
 }
 
-fn countTrue(values: []const bool) usize {
-    var count: usize = 0;
-    for (values) |value| if (value) {
-        count += 1;
-    };
-    return count;
-}
-
-test "decision graph has complete branches, valid leaves, reachability, and no cycles" {
-    var stack: [128]*const tree.Node = undefined;
-    var recommendations: [catalog.all.len]bool = @splat(false);
-    try inspect(&tree.decision_tree, &stack, 0, &recommendations);
-    try testing.expectEqual(catalog.all.len, countTrue(&recommendations));
-}
-
-fn inspect(node: *const tree.Node, stack: *[128]*const tree.Node, depth: usize, recommendations: *[catalog.all.len]bool) !void {
-    try testing.expect(depth < stack.len);
-    for (stack[0..depth]) |ancestor| try testing.expect(ancestor != node);
-    stack[depth] = node;
-
-    switch (node.node_type) {
-        .Question => {
-            try testing.expect(node.license == null);
-            try inspect(node.yes orelse return error.MissingQuestionBranch, stack, depth + 1, recommendations);
-            try inspect(node.no orelse return error.MissingQuestionBranch, stack, depth + 1, recommendations);
-        },
-        .Answer => {
-            try testing.expect(node.yes == null);
-            try testing.expect(node.no == null);
-            if (node.license) |license| {
-                inline for (catalog.all, 0..) |known, index| {
-                    if (known == license) recommendations[index] = true;
-                }
+fn visit(id: tree.Id, seen: *[std.meta.tags(tree.Id).len]bool, stack: *[std.meta.tags(tree.Id).len]bool, reached: *[catalog.all.len]bool) !void {
+    const index = @backingInt(id);
+    try testing.expect(!stack[index]);
+    if (seen[index]) return;
+    stack[index] = true;
+    seen[index] = true;
+    const current = tree.node(id);
+    if (current.license) |license| {
+        var found = false;
+        inline for (catalog.all, 0..) |known, license_index| {
+            if (known == license) {
+                reached[license_index] = true;
+                found = true;
             }
-        },
+        }
+        try testing.expect(found);
+        try testing.expect(current.choices.len == 0);
+        try testing.expect(current.advisory == null);
+    } else if (current.advisory != null) {
+        try testing.expect(current.choices.len == 0);
+    } else {
+        try testing.expect(current.choices.len > 0);
+        for (current.choices) |choice| try visit(choice.next, seen, stack, reached);
     }
+    stack[index] = false;
+}
+
+fn route(ids: []const tree.Id) !tree.Id {
+    var current = ids[0];
+    for (ids[1..]) |destination| {
+        var found = false;
+        for (tree.node(current).choices) |choice| {
+            if (choice.next == destination) {
+                current = destination;
+                found = true;
+                break;
+            }
+        }
+        if (!found) return error.NonEdgeRoute;
+    }
+    return current;
+}
+
+test "unsupported assets, ownership, existing terms, and font mismatch are distinct outcomes" {
+    try testing.expectEqual(tree.Advice.out_of_scope, tree.node(try route(&.{ .work_type, .out_of_scope })).advisory.?);
+    try testing.expectEqual(tree.Advice.ownership, tree.node(try route(&.{ .work_type, .software, .ownership })).advisory.?);
+    try testing.expectEqual(tree.Advice.existing_terms, tree.node(try route(&.{ .work_type, .software, .owned, .existing_terms })).advisory.?);
+    try testing.expectEqual(tree.Advice.font_mismatch, tree.node(try route(&.{ .work_type, .font, .font_owned, .font_terms, .font_mismatch })).advisory.?);
+    try testing.expectEqual(tree.Advice.reserved_rights, tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .reserved_rights })).advisory.?);
+}
+
+test "font help preserves the explicit acceptance boundary" {
+    try testing.expectEqual(tree.Advice.font_mismatch, tree.node(try route(&.{ .work_type, .font, .font_owned, .font_terms, .font_help, .font_mismatch })).advisory.?);
+    try testing.expectEqual(catalog.License.@"OFL-1.1", tree.node(try route(&.{ .work_type, .font, .font_owned, .font_terms, .font_help, .ofl })).license.?);
+}
+
+test "common new software path reaches MIT within six actual selections" {
+    const ids = [_]tree.Id{ .work_type, .software, .owned, .new_work, .open_source, .permissive, .mit };
+    try testing.expectEqual(catalog.License.MIT, tree.node(try route(&ids)).license.?);
+    try testing.expect(ids.len - 1 <= 6);
+}
+
+test "advanced permissive routes remain reachable" {
+    try testing.expectEqual(catalog.License.Zlib, tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .permissive, .advanced_permissive, .zlib })).license.?);
+    try testing.expectEqual(catalog.License.@"EPL-1.0", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .eclipse_scope, .epl1 })).license.?);
+}
+
+test "copyleft scope and network preference select distinct families" {
+    try testing.expectEqual(catalog.License.@"AGPL-3.0-only", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .whole_program, .network, .agpl_only })).license.?);
+    try testing.expectEqual(catalog.License.@"GPL-3.0-only", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .whole_program, .ordinary, .gpl3_only })).license.?);
+    try testing.expectEqual(catalog.License.@"MPL-2.0", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .file_scope, .mpl })).license.?);
+    try testing.expectEqual(catalog.License.@"LGPL-3.0-only", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .library_scope, .lgpl3_only })).license.?);
+}
+
+test "GNU later-version grants are explicit choices" {
+    try testing.expectEqual(catalog.License.@"GPL-3.0-only", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .whole_program, .ordinary, .gpl3_only })).license.?);
+    try testing.expectEqual(catalog.License.@"GPL-3.0-or-later", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .whole_program, .ordinary, .gpl3_later })).license.?);
+    try testing.expectEqual(catalog.License.@"LGPL-2.1-only", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .library_scope, .lgpl21_version, .lgpl21_only })).license.?);
+    try testing.expectEqual(catalog.License.@"LGPL-2.1-or-later", tree.node(try route(&.{ .work_type, .software, .owned, .new_work, .open_source, .copyleft, .library_scope, .lgpl21_version, .lgpl21_later })).license.?);
 }
